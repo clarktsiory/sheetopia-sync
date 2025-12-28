@@ -19,6 +19,19 @@ func (h *Handler) registerRoutes() {
 
 		r.Post("/api/logout", h.handleLogout)
 		r.Get("/api/user", h.handleUser)
+
+		r.Get("/api/score", h.handleGetScores)
+		r.Get("/api/score/{id}", h.handleGetScore)
+		r.Post("/api/score/{id}", h.handleUpdateScore)
+		r.Delete("/api/score/{id}", h.handleDeleteScore)
+
+		r.Get("/api/score/{id}/file", h.handleGetScoreFile)
+		r.Post("/api/score/{id}/file", h.handleUpdateScoreFile)
+
+		r.Get("/api/tag", h.handleGetTags)
+		r.Get("/api/tag/{id}", h.handleGetTag)
+		r.Post("/api/tag/{id}", h.handleUpdateTag)
+		r.Delete("/api/tag/{id}", h.handleDeleteTag)
 	})
 }
 

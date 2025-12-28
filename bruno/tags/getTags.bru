@@ -1,13 +1,13 @@
 meta {
-  name: ping
+  name: getTags
   type: http
-  seq: 1
+  seq: 2
 }
 
 get {
-  url: {{url}}/api/ping
+  url: {{url}}/api/tag
   body: none
-  auth: none
+  auth: inherit
 }
 
 settings {

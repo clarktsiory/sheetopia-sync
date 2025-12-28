@@ -11,16 +11,16 @@ import (
 
 // POST /api/login
 func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
-	type params struct {
+	type request struct {
 		Username string `json:"user"`
 		Password string `json:"password"`
 	}
-	body, ok := decodeBody[params](w, r)
+	params, ok := decodeBody[request](w, r)
 	if !ok {
 		return
 	}
 
-	user, err := h.Queries.FindUser(r.Context(), body.Username)
+	user, err := h.Queries.FindUser(r.Context(), params.Username)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			respondUnauthorized(w)
@@ -30,7 +30,7 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	valid, err := database.VerifyPassword(user.PasswordHash, body.Password)
+	valid, err := database.VerifyPassword(user.PasswordHash, params.Password)
 	if err != nil {
 		respondInternalServerError(w, err)
 		return
@@ -56,7 +56,7 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type response struct {
-		AuthKey string `json:"auth_key"`
+		AuthKey string `json:"authKey"`
 	}
 	respond(w, response{
 		AuthKey: authKey,

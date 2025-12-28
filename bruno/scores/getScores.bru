@@ -1,11 +1,11 @@
 meta {
-  name: logout
+  name: getScores
   type: http
-  seq: 4
+  seq: 6
 }
 
-post {
-  url: {{url}}/api/logout
+get {
+  url: {{url}}/api/score
   body: none
   auth: inherit
 }

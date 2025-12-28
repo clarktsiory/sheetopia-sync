@@ -8,6 +8,36 @@ import (
 	"time"
 )
 
+type DeletedScore struct {
+	ScoreID   string
+	DeletedAt time.Time
+}
+
+type DeletedTag struct {
+	TagID     string
+	DeletedAt time.Time
+}
+
+type Score struct {
+	ID                string
+	User              string
+	MetadataUpdatedAt time.Time
+	FileUpdatedAt     time.Time
+	FileType          string
+	Title             string
+	MetadataJson      []byte
+	Changed           time.Time
+}
+
+type Tag struct {
+	ID        string
+	User      string
+	UpdatedAt time.Time
+	Name      string
+	Color     int64
+	Changed   time.Time
+}
+
 type User struct {
 	Name         string
 	PasswordHash string
