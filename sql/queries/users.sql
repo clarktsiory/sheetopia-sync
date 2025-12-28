@@ -4,11 +4,17 @@ INSERT INTO users (name, password_hash) VALUES (?, ?);
 -- name: FindUser :one
 SELECT * FROM users WHERE name = ?;
 
--- name: FindUsers :one
+-- name: FindUsers :many
 SELECT * FROM users;
 
--- name: DeleteUser :exec
+-- name: DeleteUser :execresult
 DELETE FROM users WHERE name = ?;
+
+-- name: UpdateUserName :execresult
+UPDATE users SET name = ? WHERE name = ?;
+
+-- name: UpdateUserPassword :execresult
+UPDATE users SET password_hash = ? WHERE name = ?;
 
 -- name: CreateAuthKey :exec
 INSERT INTO auth_keys (key, user) VALUES (?, ?);

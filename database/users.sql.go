@@ -7,6 +7,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 )
 
 const createAuthKey = `-- name: CreateAuthKey :exec
@@ -29,7 +30,7 @@ INSERT INTO users (name, password_hash) VALUES (?, ?)
 
 type CreateUserParams struct {
 	Name         string
-	PasswordHash []byte
+	PasswordHash string
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
@@ -51,17 +52,16 @@ func (q *Queries) DeleteAuthKey(ctx context.Context, arg DeleteAuthKeyParams) er
 	return err
 }
 
-const deleteUser = `-- name: DeleteUser :exec
+const deleteUser = `-- name: DeleteUser :execresult
 DELETE FROM users WHERE name = ?
 `
 
-func (q *Queries) DeleteUser(ctx context.Context, name string) error {
-	_, err := q.db.ExecContext(ctx, deleteUser, name)
-	return err
+func (q *Queries) DeleteUser(ctx context.Context, name string) (sql.Result, error) {
+	return q.db.ExecContext(ctx, deleteUser, name)
 }
 
 const findAuthKey = `-- name: FindAuthKey :one
-SELECT "key", user, created_at FROM auth_keys WHERE user = ? AND key = ?
+SELECT "key", user, created_at, last_used FROM auth_keys WHERE user = ? AND key = ?
 `
 
 type FindAuthKeyParams struct {
@@ -72,7 +72,12 @@ type FindAuthKeyParams struct {
 func (q *Queries) FindAuthKey(ctx context.Context, arg FindAuthKeyParams) (AuthKey, error) {
 	row := q.db.QueryRowContext(ctx, findAuthKey, arg.User, arg.Key)
 	var i AuthKey
-	err := row.Scan(&i.Key, &i.User, &i.CreatedAt)
+	err := row.Scan(
+		&i.Key,
+		&i.User,
+		&i.CreatedAt,
+		&i.LastUsed,
+	)
 	return i, err
 }
 
@@ -87,13 +92,55 @@ func (q *Queries) FindUser(ctx context.Context, name string) (User, error) {
 	return i, err
 }
 
-const findUsers = `-- name: FindUsers :one
+const findUsers = `-- name: FindUsers :many
 SELECT name, password_hash, created_at FROM users
 `
 
-func (q *Queries) FindUsers(ctx context.Context) (User, error) {
-	row := q.db.QueryRowContext(ctx, findUsers)
-	var i User
-	err := row.Scan(&i.Name, &i.PasswordHash, &i.CreatedAt)
-	return i, err
+func (q *Queries) FindUsers(ctx context.Context) ([]User, error) {
+	rows, err := q.db.QueryContext(ctx, findUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []User{}
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(&i.Name, &i.PasswordHash, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateUserName = `-- name: UpdateUserName :execresult
+UPDATE users SET name = ? WHERE name = ?
+`
+
+type UpdateUserNameParams struct {
+	Name   string
+	Name_2 string
+}
+
+func (q *Queries) UpdateUserName(ctx context.Context, arg UpdateUserNameParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, updateUserName, arg.Name, arg.Name_2)
+}
+
+const updateUserPassword = `-- name: UpdateUserPassword :execresult
+UPDATE users SET password_hash = ? WHERE name = ?
+`
+
+type UpdateUserPasswordParams struct {
+	PasswordHash string
+	Name         string
+}
+
+func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, updateUserPassword, arg.PasswordHash, arg.Name)
 }
