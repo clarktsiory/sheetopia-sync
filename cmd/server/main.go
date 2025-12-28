@@ -43,6 +43,7 @@ func main() {
 		close(closed)
 	}()
 
+	log.Printf("listening on %s...", server.Addr)
 	err = server.ListenAndServe()
 	if errors.Is(err, http.ErrServerClosed) {
 		err = nil

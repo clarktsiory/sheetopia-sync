@@ -2,12 +2,15 @@ package database
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
+	"math/big"
 	"strings"
 
 	"golang.org/x/crypto/argon2"
+	"golang.org/x/crypto/pbkdf2"
 )
 
 const argon2idTime = 2
@@ -20,7 +23,7 @@ func HashPassword(password string) (string, error) {
 		return "", fmt.Errorf("generate salt: %w", err)
 	}
 
-	hash := argon2.IDKey([]byte(password), salt, 1, 3072, 4, 32)
+	hash := argon2.IDKey([]byte(password), salt, argon2idTime, argon2idMemory, argon2idThreads, 32)
 
 	b64Salt := base64.RawStdEncoding.EncodeToString(salt)
 	b64Hash := base64.RawStdEncoding.EncodeToString(hash)
@@ -30,8 +33,8 @@ func HashPassword(password string) (string, error) {
 	return encodedHash, nil
 }
 
-func VerifyPassword(expected string, provided string) (bool, error) {
-	parts := strings.Split(expected, "$")
+func VerifyPassword(expectedHash string, providedPassword string) (bool, error) {
+	parts := strings.Split(expectedHash, "$")
 	if len(parts) != 6 {
 		return false, fmt.Errorf("invalid expected hash")
 	}
@@ -63,9 +66,31 @@ func VerifyPassword(expected string, provided string) (bool, error) {
 		return false, fmt.Errorf("invalid expected hash: %w", err)
 	}
 
-	providedHash := argon2.IDKey([]byte(provided), salt, time, memory, threads, uint32(len(hash)))
+	providedHash := argon2.IDKey([]byte(providedPassword), salt, time, memory, threads, uint32(len(hash)))
 
 	return subtle.ConstantTimeCompare(hash, providedHash) == 1, nil
+}
+
+func HashAuthKey(authKey string) string {
+	hash := pbkdf2.Key([]byte(authKey), []byte("constant-salt"), 10000, 256, sha256.New)
+	return base64.RawStdEncoding.EncodeToString(hash)
+}
+
+const (
+	authKeyChars = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ123456789"
+	authKeyLen   = 64
+)
+
+func GenerateAuthKey() (string, error) {
+	authKey := make([]byte, authKeyLen)
+	for i := range authKey {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(authKeyChars))))
+		if err != nil {
+			return "", fmt.Errorf("get random char: %w", err)
+		}
+		authKey[i] = authKeyChars[n.Int64()]
+	}
+	return string(authKey), nil
 }
 
 func generateRandomBytes(n uint32) ([]byte, error) {

@@ -1,0 +1,16 @@
+meta {
+  name: ping
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{url}}/api/ping
+  body: none
+  auth: none
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

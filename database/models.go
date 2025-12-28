@@ -8,13 +8,6 @@ import (
 	"time"
 )
 
-type AuthKey struct {
-	Key       string
-	User      string
-	CreatedAt time.Time
-	LastUsed  time.Time
-}
-
 type User struct {
 	Name         string
 	PasswordHash string

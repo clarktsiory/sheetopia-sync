@@ -6,12 +6,10 @@ CREATE TABLE users (
 );
 
 CREATE TABLE auth_keys (
-    key TEXT NOT NULL,
+    key_hash TEXT PRIMARY KEY,
     user TEXT NOT NULL REFERENCES users(name) ON UPDATE CASCADE ON DELETE CASCADE,
     created_at DATETIME NOT NULL DEFAULT (unixepoch()),
-    last_used DATETIME NOT NULL DEFAULT (unixepoch()),
-
-    PRIMARY KEY (user, key)
+    last_used DATETIME NOT NULL DEFAULT (unixepoch())
 );
 
 -- +migrate Down

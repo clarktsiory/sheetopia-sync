@@ -39,6 +39,7 @@ func usersCreate(args []string, queries *database.Queries) error {
 		}
 	}
 
+	fmt.Printf("'%s'\n", password)
 	passwordHash, err := database.HashPassword(password)
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)

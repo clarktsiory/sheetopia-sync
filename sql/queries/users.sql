@@ -17,10 +17,10 @@ UPDATE users SET name = ? WHERE name = ?;
 UPDATE users SET password_hash = ? WHERE name = ?;
 
 -- name: CreateAuthKey :exec
-INSERT INTO auth_keys (key, user) VALUES (?, ?);
+INSERT INTO auth_keys (key_hash, user) VALUES (?, ?);
 
--- name: FindAuthKey :one
-SELECT * FROM auth_keys WHERE user = ? AND key = ?;
+-- name: VerifyAuthKey :one
+UPDATE auth_keys SET last_used = unixepoch() WHERE key_hash = ? RETURNING user;
 
 -- name: DeleteAuthKey :exec
-DELETE FROM auth_keys WHERE auth_keys.user = ? AND auth_keys.key = ?;
+DELETE FROM auth_keys WHERE auth_keys.key_hash = ?;
