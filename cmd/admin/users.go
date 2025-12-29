@@ -5,9 +5,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/juho05/sheetopia-sync/database"
 	"modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
+
+	"github.com/juho05/sheetopia-sync/database"
 )
 
 func usersList(queries *database.Queries) error {
@@ -39,7 +40,6 @@ func usersCreate(args []string, queries *database.Queries) error {
 		}
 	}
 
-	fmt.Printf("'%s'\n", password)
 	passwordHash, err := database.HashPassword(password)
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
