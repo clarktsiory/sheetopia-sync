@@ -10,11 +10,13 @@ import (
 
 type DeletedScore struct {
 	ScoreID   string
+	User      string
 	DeletedAt time.Time
 }
 
 type DeletedTag struct {
 	TagID     string
+	User      string
 	DeletedAt time.Time
 }
 

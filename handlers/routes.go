@@ -22,6 +22,7 @@ func (h *Handler) registerRoutes() {
 		r.Get("/api/user", h.handleUser)
 
 		r.Get("/api/score", h.handleGetScores)
+		r.Get("/api/score/deleted", h.handleGetDeletedScores)
 		r.Get("/api/score/{id}", h.handleGetScore)
 		r.Post("/api/score/{id}", h.handleUpdateScore)
 		r.Delete("/api/score/{id}", h.handleDeleteScore)
@@ -30,6 +31,7 @@ func (h *Handler) registerRoutes() {
 		r.Post("/api/score/{id}/file", h.handleUpdateScoreFile)
 
 		r.Get("/api/tag", h.handleGetTags)
+		r.Get("/api/tag/deleted", h.handleGetDeletedTags)
 		r.Get("/api/tag/{id}", h.handleGetTag)
 		r.Post("/api/tag/{id}", h.handleUpdateTag)
 		r.Delete("/api/tag/{id}", h.handleDeleteTag)

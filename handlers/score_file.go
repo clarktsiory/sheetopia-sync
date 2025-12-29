@@ -22,7 +22,7 @@ func (h *Handler) handleGetScoreFile(w http.ResponseWriter, r *http.Request) {
 	user := getUser(r)
 	id := chi.URLParam(r, "id")
 
-	score, err := h.Queries.FindScore(r.Context(), database.FindScoreParams{
+	score, err := h.Queries.FindScoreByUser(r.Context(), database.FindScoreByUserParams{
 		User: user,
 		ID:   id,
 	})
@@ -31,7 +31,7 @@ func (h *Handler) handleGetScoreFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if score.FileType == "none" {
-		w.WriteHeader(http.StatusConflict)
+		respondConflict(w)
 		return
 	}
 
@@ -69,7 +69,7 @@ func (h *Handler) handleUpdateScoreFile(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	score, err := h.Queries.FindScore(r.Context(), database.FindScoreParams{
+	score, err := h.Queries.FindScoreByUser(r.Context(), database.FindScoreByUserParams{
 		User: user,
 		ID:   id,
 	})
@@ -79,7 +79,7 @@ func (h *Handler) handleUpdateScoreFile(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if !score.FileUpdatedAt.Before(updatedAt) {
-		w.WriteHeader(http.StatusConflict)
+		respondConflict(w)
 		return
 	}
 
@@ -127,7 +127,7 @@ func (h *Handler) handleUpdateScoreFile(w http.ResponseWriter, r *http.Request) 
 	}
 	if rowsAffected == 0 {
 		// file updated time has changed during the upload causing this version to not be latest anymore
-		w.WriteHeader(http.StatusConflict)
+		respondConflict(w)
 		return
 	}
 

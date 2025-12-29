@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"time"
 )
 
 func getUser(r *http.Request) string {
@@ -33,9 +34,16 @@ func respondOK(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func respondConflict(w http.ResponseWriter) {
+	respondStatus(w, http.StatusConflict)
+}
+
+func respondForbidden(w http.ResponseWriter) {
+	respondStatus(w, http.StatusForbidden)
+}
+
 func respondUnauthorized(w http.ResponseWriter) {
-	w.WriteHeader(http.StatusUnauthorized)
-	_, _ = w.Write([]byte(http.StatusText(http.StatusUnauthorized)))
+	respondStatus(w, http.StatusUnauthorized)
 }
 
 func respondErr(w http.ResponseWriter, err error) {
@@ -48,18 +56,33 @@ func respondErr(w http.ResponseWriter, err error) {
 
 func respondInternalServerError(w http.ResponseWriter, err error) {
 	log.Printf("Internal Server Error: %s", err)
-	w.WriteHeader(http.StatusInternalServerError)
-	_, _ = w.Write([]byte(http.StatusText(http.StatusInternalServerError)))
+	respondStatus(w, http.StatusInternalServerError)
 }
 
 func respondNotFound(w http.ResponseWriter) {
-	w.WriteHeader(http.StatusNotFound)
-	_, _ = w.Write([]byte(http.StatusText(http.StatusNotFound)))
+	respondStatus(w, http.StatusNotFound)
 }
 
 func respondBadRequest(w http.ResponseWriter) {
-	w.WriteHeader(http.StatusBadRequest)
-	_, _ = w.Write([]byte(http.StatusText(http.StatusBadRequest)))
+	respondStatus(w, http.StatusBadRequest)
+}
+
+func respondStatus(w http.ResponseWriter, status int) {
+	w.WriteHeader(status)
+	_, _ = w.Write([]byte(http.StatusText(status)))
+}
+
+func parseTime(w http.ResponseWriter, str string, def time.Time) (time.Time, bool) {
+	if str != "" {
+		var err error
+		t, err := time.Parse(time.RFC3339, str)
+		if err != nil {
+			respondBadRequest(w)
+			return time.Time{}, false
+		}
+		return t, true
+	}
+	return def, true
 }
 
 func decodeBody[T any](w http.ResponseWriter, r *http.Request) (T, bool) {

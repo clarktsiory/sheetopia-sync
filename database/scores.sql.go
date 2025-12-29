@@ -26,20 +26,30 @@ func (q *Queries) AssignTag(ctx context.Context, arg AssignTagParams) error {
 }
 
 const createDeletedScoreMarker = `-- name: CreateDeletedScoreMarker :exec
-INSERT INTO deleted_scores (score_id, deleted_at) VALUES (?, unixepoch())
+INSERT INTO deleted_scores (score_id, user, deleted_at) VALUES (?, ?, unixepoch())
 `
 
-func (q *Queries) CreateDeletedScoreMarker(ctx context.Context, scoreID string) error {
-	_, err := q.db.ExecContext(ctx, createDeletedScoreMarker, scoreID)
+type CreateDeletedScoreMarkerParams struct {
+	ScoreID string
+	User    string
+}
+
+func (q *Queries) CreateDeletedScoreMarker(ctx context.Context, arg CreateDeletedScoreMarkerParams) error {
+	_, err := q.db.ExecContext(ctx, createDeletedScoreMarker, arg.ScoreID, arg.User)
 	return err
 }
 
 const createDeletedTagMarker = `-- name: CreateDeletedTagMarker :exec
-INSERT INTO deleted_tags (tag_id, deleted_at) VALUES (?, unixepoch())
+INSERT INTO deleted_tags (tag_id, user, deleted_at) VALUES (?, ?, unixepoch())
 `
 
-func (q *Queries) CreateDeletedTagMarker(ctx context.Context, tagID string) error {
-	_, err := q.db.ExecContext(ctx, createDeletedTagMarker, tagID)
+type CreateDeletedTagMarkerParams struct {
+	TagID string
+	User  string
+}
+
+func (q *Queries) CreateDeletedTagMarker(ctx context.Context, arg CreateDeletedTagMarkerParams) error {
+	_, err := q.db.ExecContext(ctx, createDeletedTagMarker, arg.TagID, arg.User)
 	return err
 }
 
@@ -81,39 +91,123 @@ func (q *Queries) DeleteTag(ctx context.Context, arg DeleteTagParams) (sql.Resul
 	return q.db.ExecContext(ctx, deleteTag, arg.User, arg.ID)
 }
 
+const findDeletedScoreIDsSince = `-- name: FindDeletedScoreIDsSince :many
+SELECT score_id FROM deleted_scores WHERE user = ? AND deleted_at > ?
+`
+
+type FindDeletedScoreIDsSinceParams struct {
+	User      string
+	DeletedAt time.Time
+}
+
+func (q *Queries) FindDeletedScoreIDsSince(ctx context.Context, arg FindDeletedScoreIDsSinceParams) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, findDeletedScoreIDsSince, arg.User, arg.DeletedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var score_id string
+		if err := rows.Scan(&score_id); err != nil {
+			return nil, err
+		}
+		items = append(items, score_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const findDeletedScoreMarker = `-- name: FindDeletedScoreMarker :one
-SELECT score_id, deleted_at FROM deleted_scores WHERE score_id = ?
+SELECT score_id, user, deleted_at FROM deleted_scores WHERE score_id = ?
 `
 
 func (q *Queries) FindDeletedScoreMarker(ctx context.Context, scoreID string) (DeletedScore, error) {
 	row := q.db.QueryRowContext(ctx, findDeletedScoreMarker, scoreID)
 	var i DeletedScore
-	err := row.Scan(&i.ScoreID, &i.DeletedAt)
+	err := row.Scan(&i.ScoreID, &i.User, &i.DeletedAt)
 	return i, err
 }
 
+const findDeletedTagIDsSince = `-- name: FindDeletedTagIDsSince :many
+SELECT tag_id FROM deleted_tags WHERE user = ? AND deleted_at > ?
+`
+
+type FindDeletedTagIDsSinceParams struct {
+	User      string
+	DeletedAt time.Time
+}
+
+func (q *Queries) FindDeletedTagIDsSince(ctx context.Context, arg FindDeletedTagIDsSinceParams) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, findDeletedTagIDsSince, arg.User, arg.DeletedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var tag_id string
+		if err := rows.Scan(&tag_id); err != nil {
+			return nil, err
+		}
+		items = append(items, tag_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const findDeletedTagMarker = `-- name: FindDeletedTagMarker :one
-SELECT tag_id, deleted_at FROM deleted_tags WHERE tag_id = ?
+SELECT tag_id, user, deleted_at FROM deleted_tags WHERE tag_id = ?
 `
 
 func (q *Queries) FindDeletedTagMarker(ctx context.Context, tagID string) (DeletedTag, error) {
 	row := q.db.QueryRowContext(ctx, findDeletedTagMarker, tagID)
 	var i DeletedTag
-	err := row.Scan(&i.TagID, &i.DeletedAt)
+	err := row.Scan(&i.TagID, &i.User, &i.DeletedAt)
 	return i, err
 }
 
 const findScore = `-- name: FindScore :one
+SELECT id, user, metadata_updated_at, file_updated_at, file_type, title, metadata_json, changed FROM scores WHERE id = ?
+`
+
+func (q *Queries) FindScore(ctx context.Context, id string) (Score, error) {
+	row := q.db.QueryRowContext(ctx, findScore, id)
+	var i Score
+	err := row.Scan(
+		&i.ID,
+		&i.User,
+		&i.MetadataUpdatedAt,
+		&i.FileUpdatedAt,
+		&i.FileType,
+		&i.Title,
+		&i.MetadataJson,
+		&i.Changed,
+	)
+	return i, err
+}
+
+const findScoreByUser = `-- name: FindScoreByUser :one
 SELECT id, user, metadata_updated_at, file_updated_at, file_type, title, metadata_json, changed FROM scores WHERE user = ? AND id = ?
 `
 
-type FindScoreParams struct {
+type FindScoreByUserParams struct {
 	User string
 	ID   string
 }
 
-func (q *Queries) FindScore(ctx context.Context, arg FindScoreParams) (Score, error) {
-	row := q.db.QueryRowContext(ctx, findScore, arg.User, arg.ID)
+func (q *Queries) FindScoreByUser(ctx context.Context, arg FindScoreByUserParams) (Score, error) {
+	row := q.db.QueryRowContext(ctx, findScoreByUser, arg.User, arg.ID)
 	var i Score
 	err := row.Scan(
 		&i.ID,
@@ -186,16 +280,34 @@ func (q *Queries) FindScoresChangedAfterWithTagIds(ctx context.Context, arg Find
 }
 
 const findTag = `-- name: FindTag :one
+SELECT id, user, updated_at, name, color, changed FROM tags WHERE id = ?
+`
+
+func (q *Queries) FindTag(ctx context.Context, id string) (Tag, error) {
+	row := q.db.QueryRowContext(ctx, findTag, id)
+	var i Tag
+	err := row.Scan(
+		&i.ID,
+		&i.User,
+		&i.UpdatedAt,
+		&i.Name,
+		&i.Color,
+		&i.Changed,
+	)
+	return i, err
+}
+
+const findTagByUser = `-- name: FindTagByUser :one
 SELECT id, user, updated_at, name, color, changed FROM tags WHERE user = ? AND id = ?
 `
 
-type FindTagParams struct {
+type FindTagByUserParams struct {
 	User string
 	ID   string
 }
 
-func (q *Queries) FindTag(ctx context.Context, arg FindTagParams) (Tag, error) {
-	row := q.db.QueryRowContext(ctx, findTag, arg.User, arg.ID)
+func (q *Queries) FindTagByUser(ctx context.Context, arg FindTagByUserParams) (Tag, error) {
+	row := q.db.QueryRowContext(ctx, findTagByUser, arg.User, arg.ID)
 	var i Tag
 	err := row.Scan(
 		&i.ID,

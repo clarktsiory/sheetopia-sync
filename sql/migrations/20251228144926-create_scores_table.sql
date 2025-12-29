@@ -28,11 +28,13 @@ CREATE TABLE score_tags(
 
 CREATE TABLE deleted_scores (
     score_id TEXT PRIMARY KEY,
+    user TEXT NOT NULL REFERENCES users(name) ON UPDATE CASCADE ON DELETE CASCADE,
     deleted_at DATETIME NOT NULL DEFAULT (unixepoch())
 );
 
 CREATE TABLE deleted_tags (
     tag_id TEXT PRIMARY KEY,
+    user TEXT NOT NULL REFERENCES users(name) ON UPDATE CASCADE ON DELETE CASCADE,
     deleted_at DATETIME NOT NULL DEFAULT (unixepoch())
 );
 

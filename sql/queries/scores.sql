@@ -1,4 +1,7 @@
 -- name: FindScore :one
+SELECT * FROM scores WHERE id = ?;
+
+-- name: FindScoreByUser :one
 SELECT * FROM scores WHERE user = ? AND id = ?;
 
 -- name: FindScoresChangedAfterWithTagIds :many
@@ -14,10 +17,13 @@ ON CONFLICT DO UPDATE SET metadata_updated_at = excluded.metadata_updated_at, ti
 DELETE FROM scores WHERE user = ? AND id = ? RETURNING *;
 
 -- name: CreateDeletedScoreMarker :exec
-INSERT INTO deleted_scores (score_id, deleted_at) VALUES (?, unixepoch());
+INSERT INTO deleted_scores (score_id, user, deleted_at) VALUES (?, ?, unixepoch());
 
 -- name: FindDeletedScoreMarker :one
 SELECT * FROM deleted_scores WHERE score_id = ?;
+
+-- name: FindDeletedScoreIDsSince :many
+SELECT score_id FROM deleted_scores WHERE user = ? AND deleted_at > ?;
 
 -- name: UnassignAllTags :exec
 DELETE FROM score_tags WHERE score_id = ?;
@@ -26,6 +32,9 @@ DELETE FROM score_tags WHERE score_id = ?;
 INSERT INTO score_tags (score_id, tag_id) VALUES (?, ?) ON CONFLICT (score_id,tag_id) DO NOTHING;
 
 -- name: FindTag :one
+SELECT * FROM tags WHERE id = ?;
+
+-- name: FindTagByUser :one
 SELECT * FROM tags WHERE user = ? AND id = ?;
 
 -- name: FindTagsChangedAfter :many
@@ -41,8 +50,11 @@ DELETE FROM tags WHERE user = ? AND id = ?;
 -- name: FindDeletedTagMarker :one
 SELECT * FROM deleted_tags WHERE tag_id = ?;
 
+-- name: FindDeletedTagIDsSince :many
+SELECT tag_id FROM deleted_tags WHERE user = ? AND deleted_at > ?;
+
 -- name: CreateDeletedTagMarker :exec
-INSERT INTO deleted_tags (tag_id, deleted_at) VALUES (?, unixepoch());
+INSERT INTO deleted_tags (tag_id, user, deleted_at) VALUES (?, ?, unixepoch());
 
 -- name: GetAssignedTagIDs :many
 SELECT tag_id FROM score_tags WHERE score_id = ?;

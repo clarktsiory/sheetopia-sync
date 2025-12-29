@@ -28,15 +28,9 @@ type scoreResponse struct {
 func (h *Handler) handleGetScores(w http.ResponseWriter, r *http.Request) {
 	user := getUser(r)
 
-	changedAfterStr := r.URL.Query().Get("changedAfter")
-	changedAfter := time.Unix(0, 0)
-	if changedAfterStr != "" {
-		var err error
-		changedAfter, err = time.Parse(time.RFC3339, changedAfterStr)
-		if err != nil {
-			respondBadRequest(w)
-			return
-		}
+	changedAfter, ok := parseTime(w, r.URL.Query().Get("changedAfter"), time.Unix(0, 0))
+	if !ok {
+		return
 	}
 
 	results, err := h.Queries.FindScoresChangedAfterWithTagIds(r.Context(), database.FindScoresChangedAfterWithTagIdsParams{
@@ -78,11 +72,37 @@ func (h *Handler) handleGetScores(w http.ResponseWriter, r *http.Request) {
 	}, http.StatusOK)
 }
 
+// GET /api/score/deleted?since=<time>
+func (h *Handler) handleGetDeletedScores(w http.ResponseWriter, r *http.Request) {
+	user := getUser(r)
+	since, ok := parseTime(w, r.URL.Query().Get("since"), time.Unix(0, 0))
+	if !ok {
+		return
+	}
+
+	ids, err := h.Queries.FindDeletedScoreIDsSince(r.Context(), database.FindDeletedScoreIDsSinceParams{
+		User:      user,
+		DeletedAt: since,
+	})
+	if err != nil {
+		respondErr(w, err)
+		return
+	}
+
+	type response struct {
+		ScoreIDs []string `json:"scoreIds"`
+	}
+	respond(w, response{
+		ScoreIDs: ids,
+	}, http.StatusOK)
+}
+
+// GET /api/score/:id
 func (h *Handler) handleGetScore(w http.ResponseWriter, r *http.Request) {
 	user := getUser(r)
 	id := chi.URLParam(r, "id")
 
-	score, err := h.Queries.FindScore(r.Context(), database.FindScoreParams{
+	score, err := h.Queries.FindScoreByUser(r.Context(), database.FindScoreByUserParams{
 		User: user,
 		ID:   id,
 	})
@@ -91,7 +111,7 @@ func (h *Handler) handleGetScore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if score.FileType == "none" {
-		w.WriteHeader(http.StatusConflict)
+		respondConflict(w)
 		return
 	}
 
@@ -147,11 +167,12 @@ func (h *Handler) handleUpdateScore(w http.ResponseWriter, r *http.Request) {
 
 	q := h.Queries.WithTx(tx)
 
-	score, err := q.FindScore(r.Context(), database.FindScoreParams{
-		User: user,
-		ID:   id,
-	})
+	score, err := q.FindScore(r.Context(), id)
 	if err == nil {
+		if score.User != user {
+			respondForbidden(w)
+			return
+		}
 		if !score.MetadataUpdatedAt.Before(params.MetadataUpdatedAt) {
 			type response struct {
 				MetadataUpdatedAt time.Time `json:"metadataUpdatedAt"`
@@ -240,7 +261,10 @@ func (h *Handler) handleDeleteScore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = q.CreateDeletedScoreMarker(r.Context(), id)
+	err = q.CreateDeletedScoreMarker(r.Context(), database.CreateDeletedScoreMarkerParams{
+		ScoreID: id,
+		User:    user,
+	})
 	if err != nil {
 		respondErr(w, fmt.Errorf("create deleted score marker: %w", err))
 		return
@@ -252,10 +276,12 @@ func (h *Handler) handleDeleteScore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filePath := scoreFilePath(score.ID, database.FileType(score.FileType))
-	err = os.Remove(filePath)
-	if err != nil {
-		log.Printf("failed to delete score file of deleted score: %s", err)
+	if score.FileType != "none" {
+		filePath := scoreFilePath(score.ID, database.FileType(score.FileType))
+		err = os.Remove(filePath)
+		if err != nil {
+			log.Printf("failed to delete score file of deleted score: %s", err)
+		}
 	}
 
 	respondOK(w)

@@ -22,15 +22,9 @@ type tagResponse struct {
 func (h *Handler) handleGetTags(w http.ResponseWriter, r *http.Request) {
 	user := getUser(r)
 
-	changedAfterStr := r.URL.Query().Get("changedAfter")
-	changedAfter := time.Unix(0, 0)
-	if changedAfterStr != "" {
-		var err error
-		changedAfter, err = time.Parse(time.RFC3339, changedAfterStr)
-		if err != nil {
-			respondBadRequest(w)
-			return
-		}
+	changedAfter, ok := parseTime(w, r.URL.Query().Get("changedAfter"), time.Unix(0, 0))
+	if !ok {
+		return
 	}
 
 	tags, err := h.Queries.FindTagsChangedAfter(r.Context(), database.FindTagsChangedAfterParams{
@@ -60,12 +54,37 @@ func (h *Handler) handleGetTags(w http.ResponseWriter, r *http.Request) {
 	}, http.StatusOK)
 }
 
+// GET /api/tag/deleted?since=<time>
+func (h *Handler) handleGetDeletedTags(w http.ResponseWriter, r *http.Request) {
+	user := getUser(r)
+	since, ok := parseTime(w, r.URL.Query().Get("since"), time.Unix(0, 0))
+	if !ok {
+		return
+	}
+
+	ids, err := h.Queries.FindDeletedTagIDsSince(r.Context(), database.FindDeletedTagIDsSinceParams{
+		User:      user,
+		DeletedAt: since,
+	})
+	if err != nil {
+		respondErr(w, fmt.Errorf("find deleted tags since time: %w", err))
+		return
+	}
+
+	type response struct {
+		TagIDs []string `json:"tagIds"`
+	}
+	respond(w, response{
+		TagIDs: ids,
+	}, http.StatusOK)
+}
+
 // GET /api/tag/:id
 func (h *Handler) handleGetTag(w http.ResponseWriter, r *http.Request) {
 	user := getUser(r)
 	id := chi.URLParam(r, "id")
 
-	tag, err := h.Queries.FindTag(r.Context(), database.FindTagParams{
+	tag, err := h.Queries.FindTagByUser(r.Context(), database.FindTagByUserParams{
 		User: user,
 		ID:   id,
 	})
@@ -112,11 +131,12 @@ func (h *Handler) handleUpdateTag(w http.ResponseWriter, r *http.Request) {
 
 	q := h.Queries.WithTx(tx)
 
-	tag, err := q.FindTag(r.Context(), database.FindTagParams{
-		User: user,
-		ID:   id,
-	})
+	tag, err := q.FindTag(r.Context(), id)
 	if err == nil {
+		if tag.User != user {
+			respondForbidden(w)
+			return
+		}
 		if !tag.UpdatedAt.Before(params.UpdatedAt) {
 			type response struct {
 				UpdatedAt time.Time `json:"updatedAt"`
@@ -198,7 +218,10 @@ func (h *Handler) handleDeleteTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = q.CreateDeletedTagMarker(r.Context(), id)
+	err = q.CreateDeletedTagMarker(r.Context(), database.CreateDeletedTagMarkerParams{
+		TagID: id,
+		User:  user,
+	})
 	if err != nil {
 		respondErr(w, fmt.Errorf("create deleted tag marker: %w", err))
 		return
