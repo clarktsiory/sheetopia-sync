@@ -11,7 +11,7 @@ WHERE user = ? AND changed > ? AND file_type != 'none' ORDER BY scores.id;
 -- name: UpsertScore :exec
 INSERT INTO scores (id, user, metadata_updated_at, file_updated_at, file_type, title, metadata_json, changed)
 VALUES (?,?,?,0,'none',?,?,unixepoch())
-ON CONFLICT DO UPDATE SET metadata_updated_at = excluded.metadata_updated_at, title = excluded.title, metadata_json = excluded.metadata_json, changed = excluded.changed;
+ON CONFLICT (id) DO UPDATE SET metadata_updated_at = excluded.metadata_updated_at, title = excluded.title, metadata_json = excluded.metadata_json, changed = excluded.changed;
 
 -- name: DeleteScore :one
 DELETE FROM scores WHERE user = ? AND id = ? RETURNING *;
