@@ -17,10 +17,16 @@ import (
 
 var scoreFilesDir = "score_files"
 
-// GET /api/score/:id/file
+// GET /api/score/:id/file?fileType=<type>
 func (h *Handler) handleGetScoreFile(w http.ResponseWriter, r *http.Request) {
 	user := getUser(r)
 	id := chi.URLParam(r, "id")
+
+	fileType := database.FileType(chi.URLParam(r, "fileType"))
+	if fileType != "" && !fileType.Valid() {
+		respondBadRequest(w)
+		return
+	}
 
 	score, err := h.Queries.FindScoreByUser(r.Context(), database.FindScoreByUserParams{
 		User: user,
@@ -30,7 +36,7 @@ func (h *Handler) handleGetScoreFile(w http.ResponseWriter, r *http.Request) {
 		respondErr(w, fmt.Errorf("find score: %w", err))
 		return
 	}
-	if score.FileType == "none" {
+	if score.FileType == "none" || (fileType != "" && string(fileType) != score.FileType) {
 		respondConflict(w)
 		return
 	}
