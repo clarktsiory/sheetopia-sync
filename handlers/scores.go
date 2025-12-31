@@ -252,12 +252,21 @@ func (h *Handler) handleDeleteScore(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	q := h.Queries.WithTx(tx)
-	score, err := q.DeleteScore(r.Context(), database.DeleteScoreParams{
+	result, err := q.DeleteScore(r.Context(), database.DeleteScoreParams{
 		User: user,
 		ID:   id,
 	})
 	if err != nil {
 		respondErr(w, fmt.Errorf("delete score: %w", err))
+		return
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		respondErr(w, fmt.Errorf("affected rows: %w", err))
+		return
+	}
+	if rowsAffected == 0 {
+		respondNotFound(w)
 		return
 	}
 
@@ -276,12 +285,10 @@ func (h *Handler) handleDeleteScore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if score.FileType != "none" {
-		filePath := scoreFilePath(score.ID, database.FileType(score.FileType))
-		err = os.Remove(filePath)
-		if err != nil {
-			log.Printf("failed to delete score file of deleted score: %s", err)
-		}
+	dir := scoreDirPath(id)
+	err = os.RemoveAll(dir)
+	if err != nil {
+		log.Printf("failed to delete score file of deleted score: %s", err)
 	}
 
 	respondOK(w)

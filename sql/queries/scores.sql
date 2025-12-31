@@ -13,8 +13,8 @@ INSERT INTO scores (id, user, metadata_updated_at, file_updated_at, file_type, t
 VALUES (?,?,?,0,'none',?,?,unixepoch())
 ON CONFLICT (id) DO UPDATE SET metadata_updated_at = excluded.metadata_updated_at, title = excluded.title, metadata_json = excluded.metadata_json, changed = excluded.changed;
 
--- name: DeleteScore :one
-DELETE FROM scores WHERE user = ? AND id = ? RETURNING *;
+-- name: DeleteScore :execresult
+DELETE FROM scores WHERE user = ? AND id = ?;
 
 -- name: CreateDeletedScoreMarker :exec
 INSERT INTO deleted_scores (score_id, user, deleted_at) VALUES (?, ?, unixepoch());

@@ -53,8 +53,8 @@ func (q *Queries) CreateDeletedTagMarker(ctx context.Context, arg CreateDeletedT
 	return err
 }
 
-const deleteScore = `-- name: DeleteScore :one
-DELETE FROM scores WHERE user = ? AND id = ? RETURNING id, user, metadata_updated_at, file_updated_at, file_type, title, metadata_json, changed
+const deleteScore = `-- name: DeleteScore :execresult
+DELETE FROM scores WHERE user = ? AND id = ?
 `
 
 type DeleteScoreParams struct {
@@ -62,20 +62,8 @@ type DeleteScoreParams struct {
 	ID   string
 }
 
-func (q *Queries) DeleteScore(ctx context.Context, arg DeleteScoreParams) (Score, error) {
-	row := q.db.QueryRowContext(ctx, deleteScore, arg.User, arg.ID)
-	var i Score
-	err := row.Scan(
-		&i.ID,
-		&i.User,
-		&i.MetadataUpdatedAt,
-		&i.FileUpdatedAt,
-		&i.FileType,
-		&i.Title,
-		&i.MetadataJson,
-		&i.Changed,
-	)
-	return i, err
+func (q *Queries) DeleteScore(ctx context.Context, arg DeleteScoreParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, deleteScore, arg.User, arg.ID)
 }
 
 const deleteTag = `-- name: DeleteTag :execresult
@@ -418,7 +406,7 @@ func (q *Queries) UpdateFileInfo(ctx context.Context, arg UpdateFileInfoParams) 
 const upsertScore = `-- name: UpsertScore :exec
 INSERT INTO scores (id, user, metadata_updated_at, file_updated_at, file_type, title, metadata_json, changed)
 VALUES (?,?,?,0,'none',?,?,unixepoch())
-ON CONFLICT DO UPDATE SET metadata_updated_at = excluded.metadata_updated_at, title = excluded.title, metadata_json = excluded.metadata_json, changed = excluded.changed
+ON CONFLICT (id) DO UPDATE SET metadata_updated_at = excluded.metadata_updated_at, title = excluded.title, metadata_json = excluded.metadata_json, changed = excluded.changed
 `
 
 type UpsertScoreParams struct {

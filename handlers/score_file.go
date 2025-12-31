@@ -15,7 +15,7 @@ import (
 	"github.com/juho05/sheetopia-sync/database"
 )
 
-var scoreFilesDir = "score_files"
+var scoreFilesDir = "scores"
 
 // GET /api/score/:id/file?fileType=<type>
 func (h *Handler) handleGetScoreFile(w http.ResponseWriter, r *http.Request) {
@@ -69,7 +69,7 @@ func (h *Handler) handleUpdateScoreFile(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	err = os.MkdirAll(scoreFilesDir, 0o755)
+	err = os.MkdirAll(scoreDirPath(id), 0o755)
 	if err != nil {
 		respondInternalServerError(w, fmt.Errorf("create score file dir: %w", err))
 		return
@@ -154,14 +154,17 @@ func (h *Handler) handleUpdateScoreFile(w http.ResponseWriter, r *http.Request) 
 	respondOK(w)
 }
 
-func scoreFilePath(scoreID string, fileType database.FileType) string {
+func scoreDirPath(scoreID string) string {
 	encoded := base64.URLEncoding.EncodeToString([]byte(scoreID))
+	return path.Join(scoreFilesDir, encoded)
+}
 
+func scoreFilePath(scoreID string, fileType database.FileType) string {
 	var extension string
 	switch fileType {
 	case database.FileTypePDF:
 		extension = ".pdf"
 	}
 
-	return path.Join(scoreFilesDir, encoded+extension)
+	return path.Join(scoreDirPath(scoreID), "score"+extension)
 }
