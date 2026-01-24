@@ -16,7 +16,10 @@ import (
 
 func main() {
 	ctx := context.Background()
-	db, queries, err := database.Open(ctx, "database.sqlite")
+
+	os.MkdirAll("data", 0o755)
+
+	db, queries, err := database.Open(ctx, "data/database.sqlite")
 	if err != nil {
 		log.Fatal(err)
 	}

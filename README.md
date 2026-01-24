@@ -4,7 +4,7 @@ Sync server for [Sheetopia](https://github.com/juho05/sheetopia).
 
 ## License
 
-Copyright (c) 2025 Julian Hofmann
+Copyright (c) 2025-2026 Julian Hofmann
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as published

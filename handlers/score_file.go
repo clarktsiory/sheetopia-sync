@@ -12,10 +12,11 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
 	"github.com/juho05/sheetopia-sync/database"
 )
 
-var scoreFilesDir = "scores"
+var scoreFilesDir = "data/scores"
 
 // GET /api/score/:id/file?fileType=<type>
 func (h *Handler) handleGetScoreFile(w http.ResponseWriter, r *http.Request) {
