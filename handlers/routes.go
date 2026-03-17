@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/juho05/sheetopia-sync"
 )
 
 func (h *Handler) registerRoutes() {
@@ -49,7 +50,7 @@ func (h *Handler) handleInfo(w http.ResponseWriter, r *http.Request) {
 	respond(w, response{
 		Server:        "sheetopia-sync",
 		Time:          time.Now(),
-		ServerVersion: "dev", // TODO
-		APIVersion:    "0.0.1",
+		ServerVersion: sheetopia.Version,
+		APIVersion:    sheetopia.APIVersion,
 	}, http.StatusOK)
 }

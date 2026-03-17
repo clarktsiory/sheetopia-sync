@@ -44,7 +44,7 @@ curl "http://localhost:8080/api/info"
 
 A successful response will look similar to this:
 ```json
-{"server":"sheetopia-sync","time":"2026-03-17T11:01:49.419148866Z","serverVersion":"0.1.0","apiVersion":"0.0.1"}
+{"server":"sheetopia-sync","time":"2026-03-17T11:01:49.419148866Z","serverVersion":"0.1.0","apiVersion":"0.1.0"}
 ```
 
 In case something does not work correctly you can view the logs with:
