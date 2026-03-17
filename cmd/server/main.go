@@ -3,13 +3,16 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
+	"github.com/juho05/sheetopia-sync/config"
 	"github.com/juho05/sheetopia-sync/database"
 	"github.com/juho05/sheetopia-sync/handlers"
 )
@@ -17,18 +20,21 @@ import (
 func main() {
 	ctx := context.Background()
 
-	os.MkdirAll("data", 0o755)
-
-	db, queries, err := database.Open(ctx, "data/database.sqlite")
+	err := config.Load()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("invalid config: %s", err)
+	}
+
+	db, queries, err := database.Open(ctx, filepath.Join(config.DataDir, "database.sqlite"))
+	if err != nil {
+		log.Fatalf("Failed to open database: %s", err)
 	}
 	defer db.Close()
 
 	handler := handlers.NewHandler(db, queries)
 
 	server := http.Server{
-		Addr:    ":8080",
+		Addr:    fmt.Sprintf(":%d", config.Port),
 		Handler: handler,
 	}
 

@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
+	"github.com/juho05/sheetopia-sync/config"
 	"github.com/juho05/sheetopia-sync/database"
 )
 
@@ -14,7 +16,13 @@ var ErrUsage = errors.New("usage")
 
 func run() error {
 	ctx := context.Background()
-	db, queries, err := database.Open(ctx, "database.sqlite")
+
+	err := config.Load()
+	if err != nil {
+		return fmt.Errorf("invalid config: %w", err)
+	}
+
+	db, queries, err := database.Open(ctx, filepath.Join(config.DataDir, "database.sqlite"))
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}

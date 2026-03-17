@@ -8,15 +8,14 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/juho05/sheetopia-sync/config"
 
 	"github.com/juho05/sheetopia-sync/database"
 )
-
-var scoreFilesDir = "data/scores"
 
 // GET /api/score/:id/file?fileType=<type>
 func (h *Handler) handleGetScoreFile(w http.ResponseWriter, r *http.Request) {
@@ -97,7 +96,12 @@ func (h *Handler) handleUpdateScoreFile(w http.ResponseWriter, r *http.Request) 
 		respondInternalServerError(w, fmt.Errorf("create part file: %w", err))
 		return
 	}
-	defer os.Remove(partFile.Name())
+	defer func(name string) {
+		err := os.Remove(name)
+		if err != nil {
+			log.Printf("failed to delete temporary .part file: %s", err)
+		}
+	}(partFile.Name())
 
 	// Limit file size to 1 GB because the client currently does not handle file sizes this must be
 	// large enough that it is never reached in normal usage.
@@ -157,7 +161,7 @@ func (h *Handler) handleUpdateScoreFile(w http.ResponseWriter, r *http.Request) 
 
 func scoreDirPath(scoreID string) string {
 	encoded := base64.URLEncoding.EncodeToString([]byte(scoreID))
-	return path.Join(scoreFilesDir, encoded)
+	return filepath.Join(config.DataDir, "scores", encoded)
 }
 
 func scoreFilePath(scoreID string, fileType database.FileType) string {
@@ -167,5 +171,5 @@ func scoreFilePath(scoreID string, fileType database.FileType) string {
 		extension = ".pdf"
 	}
 
-	return path.Join(scoreDirPath(scoreID), "score"+extension)
+	return filepath.Join(scoreDirPath(scoreID), "score"+extension)
 }
