@@ -60,4 +60,4 @@ INSERT INTO deleted_tags (tag_id, user, deleted_at) VALUES (?, ?, unixepoch());
 SELECT tag_id FROM score_tags WHERE score_id = ?;
 
 -- name: UpdateFileInfo :execresult
-UPDATE scores SET file_updated_at = ?, file_type = ? WHERE id = ? AND file_updated_at < ?;
+UPDATE scores SET file_updated_at = ?, file_type = ?, changed = unixepoch() WHERE id = ? AND file_updated_at < ?;

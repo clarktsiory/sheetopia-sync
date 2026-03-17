@@ -384,7 +384,7 @@ func (q *Queries) UnassignAllTags(ctx context.Context, scoreID string) error {
 }
 
 const updateFileInfo = `-- name: UpdateFileInfo :execresult
-UPDATE scores SET file_updated_at = ?, file_type = ? WHERE id = ? AND file_updated_at < ?
+UPDATE scores SET file_updated_at = ?, file_type = ?, changed = unixepoch() WHERE id = ? AND file_updated_at < ?
 `
 
 type UpdateFileInfoParams struct {
