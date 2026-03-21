@@ -6,7 +6,7 @@ require (
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/rubenv/sql-migrate v1.8.1
 	golang.org/x/crypto v0.49.0
-	modernc.org/sqlite v1.46.2
+	modernc.org/sqlite v1.47.0
 )
 
 require (
