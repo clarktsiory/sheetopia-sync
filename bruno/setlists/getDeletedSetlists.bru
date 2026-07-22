@@ -1,0 +1,20 @@
+meta {
+  name: getDeletedSetlists
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{url}}/api/setlist/deleted?since=2026-07-21T17:46:57.000Z
+  body: none
+  auth: inherit
+}
+
+params:query {
+  since: 2026-07-21T17:46:57.000Z
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

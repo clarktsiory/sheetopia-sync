@@ -14,6 +14,12 @@ type DeletedScore struct {
 	DeletedAt time.Time
 }
 
+type DeletedSetlist struct {
+	SetlistID string
+	User      string
+	DeletedAt time.Time
+}
+
 type DeletedTag struct {
 	TagID     string
 	User      string
@@ -29,6 +35,14 @@ type Score struct {
 	Title             string
 	MetadataJson      []byte
 	Changed           time.Time
+}
+
+type Setlist struct {
+	ID        string
+	User      string
+	UpdatedAt time.Time
+	Name      string
+	Changed   time.Time
 }
 
 type Tag struct {

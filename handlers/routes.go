@@ -36,6 +36,12 @@ func (h *Handler) registerRoutes() {
 		r.Get("/api/tag/{id}", h.handleGetTag)
 		r.Post("/api/tag/{id}", h.handleUpdateTag)
 		r.Delete("/api/tag/{id}", h.handleDeleteTag)
+
+		r.Get("/api/setlist", h.handleGetSetlists)
+		r.Get("/api/setlist/deleted", h.handleGetDeletedSetlists)
+		r.Get("/api/setlist/{id}", h.handleGetSetlist)
+		r.Post("/api/setlist/{id}", h.handleUpdateSetlist)
+		r.Delete("/api/setlist/{id}", h.handleDeleteSetlist)
 	})
 }
 
