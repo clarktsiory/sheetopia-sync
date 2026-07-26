@@ -12,17 +12,23 @@ import (
 )
 
 const addSetlistEntry = `-- name: AddSetlistEntry :exec
-INSERT INTO setlist_entries (setlist_id, position, score_id) VALUES (?, ?, ?)
+INSERT INTO setlist_entries (user, setlist_id, position, score_id) VALUES (?, ?, ?, ?)
 `
 
 type AddSetlistEntryParams struct {
+	User      string
 	SetlistID string
 	Position  int64
 	ScoreID   string
 }
 
 func (q *Queries) AddSetlistEntry(ctx context.Context, arg AddSetlistEntryParams) error {
-	_, err := q.db.ExecContext(ctx, addSetlistEntry, arg.SetlistID, arg.Position, arg.ScoreID)
+	_, err := q.db.ExecContext(ctx, addSetlistEntry,
+		arg.User,
+		arg.SetlistID,
+		arg.Position,
+		arg.ScoreID,
+	)
 	return err
 }
 
@@ -86,48 +92,36 @@ func (q *Queries) FindDeletedSetlistIDsSince(ctx context.Context, arg FindDelete
 }
 
 const findDeletedSetlistMarker = `-- name: FindDeletedSetlistMarker :one
-SELECT setlist_id, user, deleted_at FROM deleted_setlists WHERE setlist_id = ?
+SELECT user, setlist_id, deleted_at FROM deleted_setlists WHERE user = ? AND setlist_id = ?
 `
 
-func (q *Queries) FindDeletedSetlistMarker(ctx context.Context, setlistID string) (DeletedSetlist, error) {
-	row := q.db.QueryRowContext(ctx, findDeletedSetlistMarker, setlistID)
+type FindDeletedSetlistMarkerParams struct {
+	User      string
+	SetlistID string
+}
+
+func (q *Queries) FindDeletedSetlistMarker(ctx context.Context, arg FindDeletedSetlistMarkerParams) (DeletedSetlist, error) {
+	row := q.db.QueryRowContext(ctx, findDeletedSetlistMarker, arg.User, arg.SetlistID)
 	var i DeletedSetlist
-	err := row.Scan(&i.SetlistID, &i.User, &i.DeletedAt)
+	err := row.Scan(&i.User, &i.SetlistID, &i.DeletedAt)
 	return i, err
 }
 
 const findSetlist = `-- name: FindSetlist :one
-SELECT id, user, updated_at, name, changed FROM setlists WHERE id = ?
+SELECT user, id, updated_at, name, changed FROM setlists WHERE user = ? AND id = ?
 `
 
-func (q *Queries) FindSetlist(ctx context.Context, id string) (Setlist, error) {
-	row := q.db.QueryRowContext(ctx, findSetlist, id)
-	var i Setlist
-	err := row.Scan(
-		&i.ID,
-		&i.User,
-		&i.UpdatedAt,
-		&i.Name,
-		&i.Changed,
-	)
-	return i, err
-}
-
-const findSetlistByUser = `-- name: FindSetlistByUser :one
-SELECT id, user, updated_at, name, changed FROM setlists WHERE user = ? AND id = ?
-`
-
-type FindSetlistByUserParams struct {
+type FindSetlistParams struct {
 	User string
 	ID   string
 }
 
-func (q *Queries) FindSetlistByUser(ctx context.Context, arg FindSetlistByUserParams) (Setlist, error) {
-	row := q.db.QueryRowContext(ctx, findSetlistByUser, arg.User, arg.ID)
+func (q *Queries) FindSetlist(ctx context.Context, arg FindSetlistParams) (Setlist, error) {
+	row := q.db.QueryRowContext(ctx, findSetlist, arg.User, arg.ID)
 	var i Setlist
 	err := row.Scan(
-		&i.ID,
 		&i.User,
+		&i.ID,
 		&i.UpdatedAt,
 		&i.Name,
 		&i.Changed,
@@ -136,8 +130,9 @@ func (q *Queries) FindSetlistByUser(ctx context.Context, arg FindSetlistByUserPa
 }
 
 const findSetlistsChangedAfterWithScoreIds = `-- name: FindSetlistsChangedAfterWithScoreIds :many
-SELECT id, user, updated_at, name, changed, setlist_id, position, score_id FROM setlists LEFT JOIN setlist_entries ON setlists.id = setlist_entries.setlist_id
-WHERE user = ? AND changed > ? ORDER BY setlists.id, setlist_entries.position
+SELECT setlists.user, setlists.id, setlists.updated_at, setlists.name, setlists.changed, setlist_entries.score_id FROM setlists
+LEFT JOIN setlist_entries ON setlists.user = setlist_entries.user AND setlists.id = setlist_entries.setlist_id
+WHERE setlists.user = ? AND changed > ? ORDER BY setlists.id, setlist_entries.position
 `
 
 type FindSetlistsChangedAfterWithScoreIdsParams struct {
@@ -146,13 +141,11 @@ type FindSetlistsChangedAfterWithScoreIdsParams struct {
 }
 
 type FindSetlistsChangedAfterWithScoreIdsRow struct {
-	ID        string
 	User      string
+	ID        string
 	UpdatedAt time.Time
 	Name      string
 	Changed   time.Time
-	SetlistID sql.NullString
-	Position  sql.NullInt64
 	ScoreID   sql.NullString
 }
 
@@ -166,13 +159,11 @@ func (q *Queries) FindSetlistsChangedAfterWithScoreIds(ctx context.Context, arg 
 	for rows.Next() {
 		var i FindSetlistsChangedAfterWithScoreIdsRow
 		if err := rows.Scan(
-			&i.ID,
 			&i.User,
+			&i.ID,
 			&i.UpdatedAt,
 			&i.Name,
 			&i.Changed,
-			&i.SetlistID,
-			&i.Position,
 			&i.ScoreID,
 		); err != nil {
 			return nil, err
@@ -189,11 +180,16 @@ func (q *Queries) FindSetlistsChangedAfterWithScoreIds(ctx context.Context, arg 
 }
 
 const getSetlistScoreIDs = `-- name: GetSetlistScoreIDs :many
-SELECT score_id FROM setlist_entries WHERE setlist_id = ? ORDER BY position
+SELECT score_id FROM setlist_entries WHERE user = ? AND setlist_id = ? ORDER BY position
 `
 
-func (q *Queries) GetSetlistScoreIDs(ctx context.Context, setlistID string) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, getSetlistScoreIDs, setlistID)
+type GetSetlistScoreIDsParams struct {
+	User      string
+	SetlistID string
+}
+
+func (q *Queries) GetSetlistScoreIDs(ctx context.Context, arg GetSetlistScoreIDsParams) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getSetlistScoreIDs, arg.User, arg.SetlistID)
 	if err != nil {
 		return nil, err
 	}
@@ -216,17 +212,22 @@ func (q *Queries) GetSetlistScoreIDs(ctx context.Context, setlistID string) ([]s
 }
 
 const removeAllSetlistEntries = `-- name: RemoveAllSetlistEntries :exec
-DELETE FROM setlist_entries WHERE setlist_id = ?
+DELETE FROM setlist_entries WHERE user = ? AND setlist_id = ?
 `
 
-func (q *Queries) RemoveAllSetlistEntries(ctx context.Context, setlistID string) error {
-	_, err := q.db.ExecContext(ctx, removeAllSetlistEntries, setlistID)
+type RemoveAllSetlistEntriesParams struct {
+	User      string
+	SetlistID string
+}
+
+func (q *Queries) RemoveAllSetlistEntries(ctx context.Context, arg RemoveAllSetlistEntriesParams) error {
+	_, err := q.db.ExecContext(ctx, removeAllSetlistEntries, arg.User, arg.SetlistID)
 	return err
 }
 
 const upsertSetlist = `-- name: UpsertSetlist :exec
 INSERT INTO setlists (id, user, updated_at, name, changed) VALUES (?, ?, ?, ?, unixepoch())
-ON CONFLICT (id) DO UPDATE SET updated_at = excluded.updated_at, name = excluded.name, changed = excluded.changed
+ON CONFLICT (user, id) DO UPDATE SET updated_at = excluded.updated_at, name = excluded.name, changed = excluded.changed
 `
 
 type UpsertSetlistParams struct {

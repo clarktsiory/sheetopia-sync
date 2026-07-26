@@ -9,26 +9,26 @@ import (
 )
 
 type DeletedScore struct {
-	ScoreID   string
 	User      string
+	ScoreID   string
 	DeletedAt time.Time
 }
 
 type DeletedSetlist struct {
-	SetlistID string
 	User      string
+	SetlistID string
 	DeletedAt time.Time
 }
 
 type DeletedTag struct {
-	TagID     string
 	User      string
+	TagID     string
 	DeletedAt time.Time
 }
 
 type Score struct {
-	ID                string
 	User              string
+	ID                string
 	MetadataUpdatedAt time.Time
 	FileUpdatedAt     time.Time
 	FileType          string
@@ -38,16 +38,16 @@ type Score struct {
 }
 
 type Setlist struct {
-	ID        string
 	User      string
+	ID        string
 	UpdatedAt time.Time
 	Name      string
 	Changed   time.Time
 }
 
 type Tag struct {
-	ID        string
 	User      string
+	ID        string
 	UpdatedAt time.Time
 	Name      string
 	Color     int64

@@ -10,6 +10,7 @@ import (
 
 	"github.com/juho05/sheetopia-sync/config"
 	"github.com/juho05/sheetopia-sync/database"
+	"github.com/juho05/sheetopia-sync/storage"
 )
 
 var ErrUsage = errors.New("usage")
@@ -28,6 +29,11 @@ func run() error {
 	}
 	defer db.Close()
 
+	err = storage.MigrateLegacyScoreFiles(ctx, queries)
+	if err != nil {
+		return fmt.Errorf("migrate legacy score files: %w", err)
+	}
+
 	if len(os.Args) < 2 {
 		fmt.Println("USAGE:", os.Args[0], "<command>\n\nCOMMANDS:\n  users")
 		return ErrUsage
@@ -35,7 +41,7 @@ func run() error {
 
 	switch os.Args[1] {
 	case "users":
-		err = users(os.Args, queries)
+		err = users(os.Args, db, queries)
 	}
 	return err
 }

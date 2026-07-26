@@ -38,10 +38,6 @@ func respondConflict(w http.ResponseWriter) {
 	respondStatus(w, http.StatusConflict)
 }
 
-func respondForbidden(w http.ResponseWriter) {
-	respondStatus(w, http.StatusForbidden)
-}
-
 func respondUnauthorized(w http.ResponseWriter) {
 	respondStatus(w, http.StatusUnauthorized)
 }

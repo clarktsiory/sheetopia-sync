@@ -1,4 +1,4 @@
-# docker buildx build --platform linux/arm64,linux/amd64 --tag ghcr.io/juho05/sheetopia-sync:latest --push .
+# docker buildx build --platform linux/arm64,linux/amd64 --tag ghcr.io/juho05/sheetopia-sync:dev --push .
 FROM --platform=$BUILDPLATFORM golang:alpine AS build
 ARG BUILDPLATFORM
 ARG TARGETOS

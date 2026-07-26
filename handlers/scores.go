@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/juho05/sheetopia-sync/database"
+	"github.com/juho05/sheetopia-sync/storage"
 )
 
 type scoreResponse struct {
@@ -102,7 +103,7 @@ func (h *Handler) handleGetScore(w http.ResponseWriter, r *http.Request) {
 	user := getUser(r)
 	id := chi.URLParam(r, "id")
 
-	score, err := h.Queries.FindScoreByUser(r.Context(), database.FindScoreByUserParams{
+	score, err := h.Queries.FindScore(r.Context(), database.FindScoreParams{
 		User: user,
 		ID:   id,
 	})
@@ -115,7 +116,10 @@ func (h *Handler) handleGetScore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tagIDs, err := h.Queries.GetAssignedTagIDs(r.Context(), id)
+	tagIDs, err := h.Queries.GetAssignedTagIDs(r.Context(), database.GetAssignedTagIDsParams{
+		User:    user,
+		ScoreID: id,
+	})
 	if err != nil {
 		respondErr(w, fmt.Errorf("get assigned tag ids: %w", err))
 		return
@@ -167,12 +171,11 @@ func (h *Handler) handleUpdateScore(w http.ResponseWriter, r *http.Request) {
 
 	q := h.Queries.WithTx(tx)
 
-	score, err := q.FindScore(r.Context(), id)
+	score, err := q.FindScore(r.Context(), database.FindScoreParams{
+		User: user,
+		ID:   id,
+	})
 	if err == nil {
-		if score.User != user {
-			respondForbidden(w)
-			return
-		}
 		if !score.MetadataUpdatedAt.Before(params.MetadataUpdatedAt) {
 			type response struct {
 				MetadataUpdatedAt time.Time `json:"metadataUpdatedAt"`
@@ -187,7 +190,10 @@ func (h *Handler) handleUpdateScore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deletedScoreMarker, err := q.FindDeletedScoreMarker(r.Context(), id)
+	deletedScoreMarker, err := q.FindDeletedScoreMarker(r.Context(), database.FindDeletedScoreMarkerParams{
+		User:    user,
+		ScoreID: id,
+	})
 	if err == nil {
 		type response struct {
 			DeletedAt time.Time `json:"deletedAt"`
@@ -214,14 +220,31 @@ func (h *Handler) handleUpdateScore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = q.UnassignAllTags(r.Context(), id)
+	err = q.UnassignAllTags(r.Context(), database.UnassignAllTagsParams{
+		User:    user,
+		ScoreID: id,
+	})
 	if err != nil {
 		respondErr(w, fmt.Errorf("unassign tags: %w", err))
 		return
 	}
 
 	for _, tagID := range params.TagIDs {
+		_, err = q.FindTag(r.Context(), database.FindTagParams{
+			User: user,
+			ID:   tagID,
+		})
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				respondBadRequest(w)
+			} else {
+				respondErr(w, fmt.Errorf("find tag %s: %w", tagID, err))
+			}
+			return
+		}
+
 		err = q.AssignTag(r.Context(), database.AssignTagParams{
+			User:    user,
 			ScoreID: id,
 			TagID:   tagID,
 		})
@@ -285,7 +308,7 @@ func (h *Handler) handleDeleteScore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dir := scoreDirPath(id)
+	dir := storage.ScoreDir(user, id)
 	err = os.RemoveAll(dir)
 	if err != nil {
 		log.Printf("failed to delete score file of deleted score: %s", err)

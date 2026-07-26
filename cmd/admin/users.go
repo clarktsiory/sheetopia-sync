@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 
@@ -9,6 +10,7 @@ import (
 	sqlite3 "modernc.org/sqlite/lib"
 
 	"github.com/juho05/sheetopia-sync/database"
+	"github.com/juho05/sheetopia-sync/storage"
 )
 
 func usersList(queries *database.Queries) error {
@@ -77,18 +79,24 @@ func usersDelete(args []string, queries *database.Queries) error {
 			return fmt.Errorf("user '%s' does not exist", args[3])
 		}
 	}
+
+	err = storage.DeleteUserScores(args[3])
+	if err != nil {
+		return fmt.Errorf("user '%s' was deleted from the database but its score files at %s remain: %w", args[3], storage.UserScoresDir(args[3]), err)
+	}
+
 	fmt.Printf("Deleted user '%s'.\n", args[3])
 	return nil
 }
 
-func usersUpdate(args []string, queries *database.Queries) error {
+func usersUpdate(args []string, db *sql.DB, queries *database.Queries) error {
 	if len(args) < 5 {
 		fmt.Println("USAGE:", args[0], "users update <name/password> <name>")
 		return ErrUsage
 	}
 	switch args[3] {
 	case "name":
-		return usersChangeName(args[4], queries)
+		return usersChangeName(args[4], db, queries)
 	case "password":
 		return usersChangePassword(args[4], queries)
 	default:
@@ -97,10 +105,17 @@ func usersUpdate(args []string, queries *database.Queries) error {
 	}
 }
 
-func usersChangeName(user string, queries *database.Queries) error {
+func usersChangeName(user string, db *sql.DB, queries *database.Queries) error {
 	name := input("Enter new name")
 
-	result, err := queries.UpdateUserName(context.Background(), database.UpdateUserNameParams{
+	ctx := context.Background()
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	result, err := queries.WithTx(tx).UpdateUserName(ctx, database.UpdateUserNameParams{
 		Name:   name,
 		Name_2: user,
 	})
@@ -112,6 +127,16 @@ func usersChangeName(user string, queries *database.Queries) error {
 		if affectedRows == 0 {
 			return fmt.Errorf("user '%s' does not exist", user)
 		}
+	}
+
+	err = storage.RenameUserScores(user, name)
+	if err != nil {
+		return fmt.Errorf("rename score files: %w", err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("commit tx: %w", err)
 	}
 
 	fmt.Printf("Changed name from '%s' to '%s'.\n", user, name)
@@ -153,7 +178,7 @@ func usersChangePassword(user string, queries *database.Queries) error {
 	return nil
 }
 
-func users(args []string, queries *database.Queries) error {
+func users(args []string, db *sql.DB, queries *database.Queries) error {
 	if len(args) < 3 {
 		fmt.Println("USAGE:", args[0], "users <command>\n\nCOMMANDS:\n  create\n  list\n  update\n  delete")
 		return ErrUsage
@@ -165,7 +190,7 @@ func users(args []string, queries *database.Queries) error {
 	case "create":
 		err = usersCreate(args, queries)
 	case "update":
-		err = usersUpdate(args, queries)
+		err = usersUpdate(args, db, queries)
 	case "delete":
 		err = usersDelete(args, queries)
 	default:

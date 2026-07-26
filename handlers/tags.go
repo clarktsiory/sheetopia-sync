@@ -84,7 +84,7 @@ func (h *Handler) handleGetTag(w http.ResponseWriter, r *http.Request) {
 	user := getUser(r)
 	id := chi.URLParam(r, "id")
 
-	tag, err := h.Queries.FindTagByUser(r.Context(), database.FindTagByUserParams{
+	tag, err := h.Queries.FindTag(r.Context(), database.FindTagParams{
 		User: user,
 		ID:   id,
 	})
@@ -131,12 +131,11 @@ func (h *Handler) handleUpdateTag(w http.ResponseWriter, r *http.Request) {
 
 	q := h.Queries.WithTx(tx)
 
-	tag, err := q.FindTag(r.Context(), id)
+	tag, err := q.FindTag(r.Context(), database.FindTagParams{
+		User: user,
+		ID:   id,
+	})
 	if err == nil {
-		if tag.User != user {
-			respondForbidden(w)
-			return
-		}
 		if !tag.UpdatedAt.Before(params.UpdatedAt) {
 			type response struct {
 				UpdatedAt time.Time `json:"updatedAt"`
@@ -151,7 +150,10 @@ func (h *Handler) handleUpdateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deletedTagMarker, err := q.FindDeletedTagMarker(r.Context(), id)
+	deletedTagMarker, err := q.FindDeletedTagMarker(r.Context(), database.FindDeletedTagMarkerParams{
+		User:  user,
+		TagID: id,
+	})
 	if err == nil {
 		type response struct {
 			DeletedAt time.Time `json:"deletedAt"`

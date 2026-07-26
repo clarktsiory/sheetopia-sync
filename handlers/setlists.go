@@ -89,7 +89,7 @@ func (h *Handler) handleGetSetlist(w http.ResponseWriter, r *http.Request) {
 	user := getUser(r)
 	id := chi.URLParam(r, "id")
 
-	setlist, err := h.Queries.FindSetlistByUser(r.Context(), database.FindSetlistByUserParams{
+	setlist, err := h.Queries.FindSetlist(r.Context(), database.FindSetlistParams{
 		User: user,
 		ID:   id,
 	})
@@ -98,7 +98,10 @@ func (h *Handler) handleGetSetlist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scoreIDs, err := h.Queries.GetSetlistScoreIDs(r.Context(), id)
+	scoreIDs, err := h.Queries.GetSetlistScoreIDs(r.Context(), database.GetSetlistScoreIDsParams{
+		User:      user,
+		SetlistID: id,
+	})
 	if err != nil {
 		respondErr(w, fmt.Errorf("get setlist score ids: %w", err))
 		return
@@ -146,12 +149,11 @@ func (h *Handler) handleUpdateSetlist(w http.ResponseWriter, r *http.Request) {
 
 	q := h.Queries.WithTx(tx)
 
-	setlist, err := q.FindSetlist(r.Context(), id)
+	setlist, err := q.FindSetlist(r.Context(), database.FindSetlistParams{
+		User: user,
+		ID:   id,
+	})
 	if err == nil {
-		if setlist.User != user {
-			respondForbidden(w)
-			return
-		}
 		if !setlist.UpdatedAt.Before(params.UpdatedAt) {
 			type response struct {
 				UpdatedAt time.Time `json:"updatedAt"`
@@ -166,7 +168,10 @@ func (h *Handler) handleUpdateSetlist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deletedSetlistMarker, err := q.FindDeletedSetlistMarker(r.Context(), id)
+	deletedSetlistMarker, err := q.FindDeletedSetlistMarker(r.Context(), database.FindDeletedSetlistMarkerParams{
+		User:      user,
+		SetlistID: id,
+	})
 	if err == nil {
 		type response struct {
 			DeletedAt time.Time `json:"deletedAt"`
@@ -192,7 +197,10 @@ func (h *Handler) handleUpdateSetlist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = q.RemoveAllSetlistEntries(r.Context(), id)
+	err = q.RemoveAllSetlistEntries(r.Context(), database.RemoveAllSetlistEntriesParams{
+		User:      user,
+		SetlistID: id,
+	})
 	if err != nil {
 		respondErr(w, fmt.Errorf("remove setlist entries: %w", err))
 		return
@@ -200,6 +208,7 @@ func (h *Handler) handleUpdateSetlist(w http.ResponseWriter, r *http.Request) {
 
 	for i, scoreID := range params.ScoreIDs {
 		err = q.AddSetlistEntry(r.Context(), database.AddSetlistEntryParams{
+			User:      user,
 			SetlistID: id,
 			Position:  int64(i),
 			ScoreID:   scoreID,

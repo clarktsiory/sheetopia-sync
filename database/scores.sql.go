@@ -12,16 +12,17 @@ import (
 )
 
 const assignTag = `-- name: AssignTag :exec
-INSERT INTO score_tags (score_id, tag_id) VALUES (?, ?) ON CONFLICT (score_id,tag_id) DO NOTHING
+INSERT INTO score_tags (user, score_id, tag_id) VALUES (?, ?, ?) ON CONFLICT (user,score_id,tag_id) DO NOTHING
 `
 
 type AssignTagParams struct {
+	User    string
 	ScoreID string
 	TagID   string
 }
 
 func (q *Queries) AssignTag(ctx context.Context, arg AssignTagParams) error {
-	_, err := q.db.ExecContext(ctx, assignTag, arg.ScoreID, arg.TagID)
+	_, err := q.db.ExecContext(ctx, assignTag, arg.User, arg.ScoreID, arg.TagID)
 	return err
 }
 
@@ -79,6 +80,38 @@ func (q *Queries) DeleteTag(ctx context.Context, arg DeleteTagParams) (sql.Resul
 	return q.db.ExecContext(ctx, deleteTag, arg.User, arg.ID)
 }
 
+const findAllScoreIDs = `-- name: FindAllScoreIDs :many
+SELECT user, id FROM scores
+`
+
+type FindAllScoreIDsRow struct {
+	User string
+	ID   string
+}
+
+func (q *Queries) FindAllScoreIDs(ctx context.Context) ([]FindAllScoreIDsRow, error) {
+	rows, err := q.db.QueryContext(ctx, findAllScoreIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FindAllScoreIDsRow{}
+	for rows.Next() {
+		var i FindAllScoreIDsRow
+		if err := rows.Scan(&i.User, &i.ID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const findDeletedScoreIDsSince = `-- name: FindDeletedScoreIDsSince :many
 SELECT score_id FROM deleted_scores WHERE user = ? AND deleted_at > ?
 `
@@ -112,13 +145,18 @@ func (q *Queries) FindDeletedScoreIDsSince(ctx context.Context, arg FindDeletedS
 }
 
 const findDeletedScoreMarker = `-- name: FindDeletedScoreMarker :one
-SELECT score_id, user, deleted_at FROM deleted_scores WHERE score_id = ?
+SELECT user, score_id, deleted_at FROM deleted_scores WHERE user = ? AND score_id = ?
 `
 
-func (q *Queries) FindDeletedScoreMarker(ctx context.Context, scoreID string) (DeletedScore, error) {
-	row := q.db.QueryRowContext(ctx, findDeletedScoreMarker, scoreID)
+type FindDeletedScoreMarkerParams struct {
+	User    string
+	ScoreID string
+}
+
+func (q *Queries) FindDeletedScoreMarker(ctx context.Context, arg FindDeletedScoreMarkerParams) (DeletedScore, error) {
+	row := q.db.QueryRowContext(ctx, findDeletedScoreMarker, arg.User, arg.ScoreID)
 	var i DeletedScore
-	err := row.Scan(&i.ScoreID, &i.User, &i.DeletedAt)
+	err := row.Scan(&i.User, &i.ScoreID, &i.DeletedAt)
 	return i, err
 }
 
@@ -155,51 +193,36 @@ func (q *Queries) FindDeletedTagIDsSince(ctx context.Context, arg FindDeletedTag
 }
 
 const findDeletedTagMarker = `-- name: FindDeletedTagMarker :one
-SELECT tag_id, user, deleted_at FROM deleted_tags WHERE tag_id = ?
+SELECT user, tag_id, deleted_at FROM deleted_tags WHERE user = ? AND tag_id = ?
 `
 
-func (q *Queries) FindDeletedTagMarker(ctx context.Context, tagID string) (DeletedTag, error) {
-	row := q.db.QueryRowContext(ctx, findDeletedTagMarker, tagID)
+type FindDeletedTagMarkerParams struct {
+	User  string
+	TagID string
+}
+
+func (q *Queries) FindDeletedTagMarker(ctx context.Context, arg FindDeletedTagMarkerParams) (DeletedTag, error) {
+	row := q.db.QueryRowContext(ctx, findDeletedTagMarker, arg.User, arg.TagID)
 	var i DeletedTag
-	err := row.Scan(&i.TagID, &i.User, &i.DeletedAt)
+	err := row.Scan(&i.User, &i.TagID, &i.DeletedAt)
 	return i, err
 }
 
 const findScore = `-- name: FindScore :one
-SELECT id, user, metadata_updated_at, file_updated_at, file_type, title, metadata_json, changed FROM scores WHERE id = ?
+SELECT user, id, metadata_updated_at, file_updated_at, file_type, title, metadata_json, changed FROM scores WHERE user = ? AND id = ?
 `
 
-func (q *Queries) FindScore(ctx context.Context, id string) (Score, error) {
-	row := q.db.QueryRowContext(ctx, findScore, id)
-	var i Score
-	err := row.Scan(
-		&i.ID,
-		&i.User,
-		&i.MetadataUpdatedAt,
-		&i.FileUpdatedAt,
-		&i.FileType,
-		&i.Title,
-		&i.MetadataJson,
-		&i.Changed,
-	)
-	return i, err
-}
-
-const findScoreByUser = `-- name: FindScoreByUser :one
-SELECT id, user, metadata_updated_at, file_updated_at, file_type, title, metadata_json, changed FROM scores WHERE user = ? AND id = ?
-`
-
-type FindScoreByUserParams struct {
+type FindScoreParams struct {
 	User string
 	ID   string
 }
 
-func (q *Queries) FindScoreByUser(ctx context.Context, arg FindScoreByUserParams) (Score, error) {
-	row := q.db.QueryRowContext(ctx, findScoreByUser, arg.User, arg.ID)
+func (q *Queries) FindScore(ctx context.Context, arg FindScoreParams) (Score, error) {
+	row := q.db.QueryRowContext(ctx, findScore, arg.User, arg.ID)
 	var i Score
 	err := row.Scan(
-		&i.ID,
 		&i.User,
+		&i.ID,
 		&i.MetadataUpdatedAt,
 		&i.FileUpdatedAt,
 		&i.FileType,
@@ -211,8 +234,9 @@ func (q *Queries) FindScoreByUser(ctx context.Context, arg FindScoreByUserParams
 }
 
 const findScoresChangedAfterWithTagIds = `-- name: FindScoresChangedAfterWithTagIds :many
-SELECT id, user, metadata_updated_at, file_updated_at, file_type, title, metadata_json, changed, score_id, tag_id FROM scores LEFT JOIN score_tags ON scores.id = score_tags.score_id
-WHERE user = ? AND changed > ? AND file_type != 'none' ORDER BY scores.id
+SELECT scores.user, scores.id, scores.metadata_updated_at, scores.file_updated_at, scores.file_type, scores.title, scores.metadata_json, scores.changed, score_tags.tag_id FROM scores
+LEFT JOIN score_tags ON scores.user = score_tags.user AND scores.id = score_tags.score_id
+WHERE scores.user = ? AND changed > ? AND file_type != 'none' ORDER BY scores.id
 `
 
 type FindScoresChangedAfterWithTagIdsParams struct {
@@ -221,15 +245,14 @@ type FindScoresChangedAfterWithTagIdsParams struct {
 }
 
 type FindScoresChangedAfterWithTagIdsRow struct {
-	ID                string
 	User              string
+	ID                string
 	MetadataUpdatedAt time.Time
 	FileUpdatedAt     time.Time
 	FileType          string
 	Title             string
 	MetadataJson      []byte
 	Changed           time.Time
-	ScoreID           sql.NullString
 	TagID             sql.NullString
 }
 
@@ -243,15 +266,14 @@ func (q *Queries) FindScoresChangedAfterWithTagIds(ctx context.Context, arg Find
 	for rows.Next() {
 		var i FindScoresChangedAfterWithTagIdsRow
 		if err := rows.Scan(
-			&i.ID,
 			&i.User,
+			&i.ID,
 			&i.MetadataUpdatedAt,
 			&i.FileUpdatedAt,
 			&i.FileType,
 			&i.Title,
 			&i.MetadataJson,
 			&i.Changed,
-			&i.ScoreID,
 			&i.TagID,
 		); err != nil {
 			return nil, err
@@ -268,38 +290,20 @@ func (q *Queries) FindScoresChangedAfterWithTagIds(ctx context.Context, arg Find
 }
 
 const findTag = `-- name: FindTag :one
-SELECT id, user, updated_at, name, color, changed FROM tags WHERE id = ?
+SELECT user, id, updated_at, name, color, changed FROM tags WHERE user = ? AND id = ?
 `
 
-func (q *Queries) FindTag(ctx context.Context, id string) (Tag, error) {
-	row := q.db.QueryRowContext(ctx, findTag, id)
-	var i Tag
-	err := row.Scan(
-		&i.ID,
-		&i.User,
-		&i.UpdatedAt,
-		&i.Name,
-		&i.Color,
-		&i.Changed,
-	)
-	return i, err
-}
-
-const findTagByUser = `-- name: FindTagByUser :one
-SELECT id, user, updated_at, name, color, changed FROM tags WHERE user = ? AND id = ?
-`
-
-type FindTagByUserParams struct {
+type FindTagParams struct {
 	User string
 	ID   string
 }
 
-func (q *Queries) FindTagByUser(ctx context.Context, arg FindTagByUserParams) (Tag, error) {
-	row := q.db.QueryRowContext(ctx, findTagByUser, arg.User, arg.ID)
+func (q *Queries) FindTag(ctx context.Context, arg FindTagParams) (Tag, error) {
+	row := q.db.QueryRowContext(ctx, findTag, arg.User, arg.ID)
 	var i Tag
 	err := row.Scan(
-		&i.ID,
 		&i.User,
+		&i.ID,
 		&i.UpdatedAt,
 		&i.Name,
 		&i.Color,
@@ -309,7 +313,7 @@ func (q *Queries) FindTagByUser(ctx context.Context, arg FindTagByUserParams) (T
 }
 
 const findTagsChangedAfter = `-- name: FindTagsChangedAfter :many
-SELECT id, user, updated_at, name, color, changed FROM tags WHERE user = ? AND changed > ?
+SELECT user, id, updated_at, name, color, changed FROM tags WHERE user = ? AND changed > ?
 `
 
 type FindTagsChangedAfterParams struct {
@@ -327,8 +331,8 @@ func (q *Queries) FindTagsChangedAfter(ctx context.Context, arg FindTagsChangedA
 	for rows.Next() {
 		var i Tag
 		if err := rows.Scan(
-			&i.ID,
 			&i.User,
+			&i.ID,
 			&i.UpdatedAt,
 			&i.Name,
 			&i.Color,
@@ -348,11 +352,16 @@ func (q *Queries) FindTagsChangedAfter(ctx context.Context, arg FindTagsChangedA
 }
 
 const getAssignedTagIDs = `-- name: GetAssignedTagIDs :many
-SELECT tag_id FROM score_tags WHERE score_id = ?
+SELECT tag_id FROM score_tags WHERE user = ? AND score_id = ?
 `
 
-func (q *Queries) GetAssignedTagIDs(ctx context.Context, scoreID string) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, getAssignedTagIDs, scoreID)
+type GetAssignedTagIDsParams struct {
+	User    string
+	ScoreID string
+}
+
+func (q *Queries) GetAssignedTagIDs(ctx context.Context, arg GetAssignedTagIDsParams) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getAssignedTagIDs, arg.User, arg.ScoreID)
 	if err != nil {
 		return nil, err
 	}
@@ -375,21 +384,27 @@ func (q *Queries) GetAssignedTagIDs(ctx context.Context, scoreID string) ([]stri
 }
 
 const unassignAllTags = `-- name: UnassignAllTags :exec
-DELETE FROM score_tags WHERE score_id = ?
+DELETE FROM score_tags WHERE user = ? AND score_id = ?
 `
 
-func (q *Queries) UnassignAllTags(ctx context.Context, scoreID string) error {
-	_, err := q.db.ExecContext(ctx, unassignAllTags, scoreID)
+type UnassignAllTagsParams struct {
+	User    string
+	ScoreID string
+}
+
+func (q *Queries) UnassignAllTags(ctx context.Context, arg UnassignAllTagsParams) error {
+	_, err := q.db.ExecContext(ctx, unassignAllTags, arg.User, arg.ScoreID)
 	return err
 }
 
 const updateFileInfo = `-- name: UpdateFileInfo :execresult
-UPDATE scores SET file_updated_at = ?, file_type = ?, changed = unixepoch() WHERE id = ? AND file_updated_at < ?
+UPDATE scores SET file_updated_at = ?, file_type = ?, changed = unixepoch() WHERE user = ? AND id = ? AND file_updated_at < ?
 `
 
 type UpdateFileInfoParams struct {
 	FileUpdatedAt   time.Time
 	FileType        string
+	User            string
 	ID              string
 	FileUpdatedAt_2 time.Time
 }
@@ -398,6 +413,7 @@ func (q *Queries) UpdateFileInfo(ctx context.Context, arg UpdateFileInfoParams) 
 	return q.db.ExecContext(ctx, updateFileInfo,
 		arg.FileUpdatedAt,
 		arg.FileType,
+		arg.User,
 		arg.ID,
 		arg.FileUpdatedAt_2,
 	)
@@ -406,7 +422,7 @@ func (q *Queries) UpdateFileInfo(ctx context.Context, arg UpdateFileInfoParams) 
 const upsertScore = `-- name: UpsertScore :exec
 INSERT INTO scores (id, user, metadata_updated_at, file_updated_at, file_type, title, metadata_json, changed)
 VALUES (?,?,?,0,'none',?,?,unixepoch())
-ON CONFLICT (id) DO UPDATE SET metadata_updated_at = excluded.metadata_updated_at, title = excluded.title, metadata_json = excluded.metadata_json, changed = excluded.changed
+ON CONFLICT (user, id) DO UPDATE SET metadata_updated_at = excluded.metadata_updated_at, title = excluded.title, metadata_json = excluded.metadata_json, changed = excluded.changed
 `
 
 type UpsertScoreParams struct {
@@ -430,7 +446,7 @@ func (q *Queries) UpsertScore(ctx context.Context, arg UpsertScoreParams) error 
 
 const upsertTag = `-- name: UpsertTag :exec
 INSERT INTO tags (id, user, updated_at, name, color, changed) VALUES (?, ?, ?, ?, ?, unixepoch())
-ON CONFLICT (id) DO UPDATE SET updated_at = excluded.updated_at, name = excluded.name, color = excluded.color, changed = excluded.changed
+ON CONFLICT (user, id) DO UPDATE SET updated_at = excluded.updated_at, name = excluded.name, color = excluded.color, changed = excluded.changed
 `
 
 type UpsertTagParams struct {

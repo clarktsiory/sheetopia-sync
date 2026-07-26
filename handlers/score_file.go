@@ -1,20 +1,18 @@
 package handlers
 
 import (
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/juho05/sheetopia-sync/config"
 
 	"github.com/juho05/sheetopia-sync/database"
+	"github.com/juho05/sheetopia-sync/storage"
 )
 
 // GET /api/score/:id/file?fileType=<type>
@@ -22,13 +20,13 @@ func (h *Handler) handleGetScoreFile(w http.ResponseWriter, r *http.Request) {
 	user := getUser(r)
 	id := chi.URLParam(r, "id")
 
-	fileType := database.FileType(chi.URLParam(r, "fileType"))
+	fileType := database.FileType(r.URL.Query().Get("fileType"))
 	if fileType != "" && !fileType.Valid() {
 		respondBadRequest(w)
 		return
 	}
 
-	score, err := h.Queries.FindScoreByUser(r.Context(), database.FindScoreByUserParams{
+	score, err := h.Queries.FindScore(r.Context(), database.FindScoreParams{
 		User: user,
 		ID:   id,
 	})
@@ -41,7 +39,7 @@ func (h *Handler) handleGetScoreFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filePath := scoreFilePath(score.ID, database.FileType(score.FileType))
+	filePath := storage.ScoreFile(user, score.ID, database.FileType(score.FileType))
 
 	http.ServeFile(w, r, filePath)
 }
@@ -69,13 +67,7 @@ func (h *Handler) handleUpdateScoreFile(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	err = os.MkdirAll(scoreDirPath(id), 0o755)
-	if err != nil {
-		respondInternalServerError(w, fmt.Errorf("create score file dir: %w", err))
-		return
-	}
-
-	score, err := h.Queries.FindScoreByUser(r.Context(), database.FindScoreByUserParams{
+	score, err := h.Queries.FindScore(r.Context(), database.FindScoreParams{
 		User: user,
 		ID:   id,
 	})
@@ -89,7 +81,13 @@ func (h *Handler) handleUpdateScoreFile(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	filePath := scoreFilePath(id, fileType)
+	err = os.MkdirAll(storage.ScoreDir(user, id), 0o755)
+	if err != nil {
+		respondInternalServerError(w, fmt.Errorf("create score file dir: %w", err))
+		return
+	}
+
+	filePath := storage.ScoreFile(user, id, fileType)
 
 	partFile, err := os.Create(filePath + ".part")
 	if err != nil {
@@ -98,12 +96,12 @@ func (h *Handler) handleUpdateScoreFile(w http.ResponseWriter, r *http.Request) 
 	}
 	defer func(name string) {
 		err := os.Remove(name)
-		if err != nil {
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			log.Printf("failed to delete temporary .part file: %s", err)
 		}
 	}(partFile.Name())
 
-	// Limit file size to 1 GB because the client currently does not handle file sizes this must be
+	// Limit file size to 1 GB. Because the client currently does not handle file sizes this must be
 	// large enough that it is never reached in normal usage.
 	_, err = io.Copy(partFile, http.MaxBytesReader(w, r.Body, 1000<<20))
 	closeErr := partFile.Close()
@@ -125,6 +123,7 @@ func (h *Handler) handleUpdateScoreFile(w http.ResponseWriter, r *http.Request) 
 		FileUpdatedAt:   updatedAt,
 		FileUpdatedAt_2: updatedAt,
 		FileType:        string(fileType),
+		User:            user,
 		ID:              id,
 	})
 	if err != nil {
@@ -149,7 +148,7 @@ func (h *Handler) handleUpdateScoreFile(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if score.FileType != "none" && database.FileType(score.FileType) != fileType {
-		p := scoreFilePath(score.ID, database.FileType(score.FileType))
+		p := storage.ScoreFile(user, score.ID, database.FileType(score.FileType))
 		err = os.Remove(p)
 		if err != nil {
 			log.Printf("failed to remove old score file %s: %s", p, err)
@@ -157,19 +156,4 @@ func (h *Handler) handleUpdateScoreFile(w http.ResponseWriter, r *http.Request) 
 	}
 
 	respondOK(w)
-}
-
-func scoreDirPath(scoreID string) string {
-	encoded := base64.URLEncoding.EncodeToString([]byte(scoreID))
-	return filepath.Join(config.DataDir, "scores", encoded)
-}
-
-func scoreFilePath(scoreID string, fileType database.FileType) string {
-	var extension string
-	switch fileType {
-	case database.FileTypePDF:
-		extension = ".pdf"
-	}
-
-	return filepath.Join(scoreDirPath(scoreID), "score"+extension)
 }

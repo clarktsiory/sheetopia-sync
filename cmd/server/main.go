@@ -15,6 +15,7 @@ import (
 	"github.com/juho05/sheetopia-sync/config"
 	"github.com/juho05/sheetopia-sync/database"
 	"github.com/juho05/sheetopia-sync/handlers"
+	"github.com/juho05/sheetopia-sync/storage"
 )
 
 func main() {
@@ -30,6 +31,11 @@ func main() {
 		log.Fatalf("Failed to open database: %s", err)
 	}
 	defer db.Close()
+
+	err = storage.MigrateLegacyScoreFiles(ctx, queries)
+	if err != nil {
+		log.Fatalf("Failed to migrate legacy score files: %s", err)
+	}
 
 	handler := handlers.NewHandler(db, queries)
 
