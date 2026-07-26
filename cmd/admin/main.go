@@ -15,6 +15,10 @@ import (
 
 var ErrUsage = errors.New("usage")
 
+func printUsage() {
+	fmt.Println("USAGE:", os.Args[0], "<command>\n\nCOMMANDS:\n  users")
+}
+
 func run() error {
 	ctx := context.Background()
 
@@ -35,13 +39,16 @@ func run() error {
 	}
 
 	if len(os.Args) < 2 {
-		fmt.Println("USAGE:", os.Args[0], "<command>\n\nCOMMANDS:\n  users")
+		printUsage()
 		return ErrUsage
 	}
 
 	switch os.Args[1] {
 	case "users":
 		err = users(os.Args, db, queries)
+	default:
+		printUsage()
+		return ErrUsage
 	}
 	return err
 }

@@ -31,15 +31,9 @@ func usersCreate(args []string, queries *database.Queries) error {
 		return ErrUsage
 	}
 
-	var password string
-	for password == "" {
-		p1 := inputPassword("Enter password")
-		p2 := inputPassword("Repeat password")
-		if p1 == p2 {
-			password = p1
-		} else {
-			fmt.Println("Passwords don't match. Try again.")
-		}
+	password, err := inputNewPassword("Enter password")
+	if err != nil {
+		return err
 	}
 
 	passwordHash, err := database.HashPassword(password)
@@ -106,7 +100,13 @@ func usersUpdate(args []string, db *sql.DB, queries *database.Queries) error {
 }
 
 func usersChangeName(user string, db *sql.DB, queries *database.Queries) error {
-	name := input("Enter new name")
+	name, err := input("Enter new name")
+	if err != nil {
+		return err
+	}
+	if name == "" {
+		return errors.New("name must not be empty")
+	}
 
 	ctx := context.Background()
 	tx, err := db.BeginTx(ctx, nil)
@@ -144,15 +144,9 @@ func usersChangeName(user string, db *sql.DB, queries *database.Queries) error {
 }
 
 func usersChangePassword(user string, queries *database.Queries) error {
-	var password string
-	for password == "" {
-		p1 := inputPassword("Enter new password")
-		p2 := inputPassword("Repeat password")
-		if p1 == p2 {
-			password = p1
-		} else {
-			fmt.Println("Passwords don't match. Try again.")
-		}
+	password, err := inputNewPassword("Enter new password")
+	if err != nil {
+		return err
 	}
 
 	passwordHash, err := database.HashPassword(password)

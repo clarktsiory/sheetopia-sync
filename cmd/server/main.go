@@ -50,7 +50,7 @@ func main() {
 		signal.Notify(sigint, syscall.SIGINT, syscall.SIGTERM)
 		<-sigint
 		timeout, cancelTimeout := context.WithTimeout(context.Background(), 5*time.Second)
-		err = server.Shutdown(timeout)
+		err := server.Shutdown(timeout)
 		if err != nil {
 			log.Printf("shutdown: %s", err)
 		}
@@ -63,7 +63,8 @@ func main() {
 	if errors.Is(err, http.ErrServerClosed) {
 		err = nil
 	}
-	if err == nil {
-		<-closed
+	if err != nil {
+		log.Fatalf("failed to listen on %s: %v", server.Addr, err)
 	}
+	<-closed
 }
