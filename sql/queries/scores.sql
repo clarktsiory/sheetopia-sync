@@ -23,8 +23,11 @@ INSERT INTO deleted_scores (score_id, user, deleted_at) VALUES (?, ?, unixepoch(
 -- name: FindDeletedScoreMarker :one
 SELECT * FROM deleted_scores WHERE user = ? AND score_id = ?;
 
--- name: FindDeletedScoreIDsSince :many
-SELECT score_id FROM deleted_scores WHERE user = ? AND deleted_at > ?;
+-- name: FindDeletedScoresSince :many
+SELECT score_id, deleted_at FROM deleted_scores WHERE user = ? AND deleted_at > ?;
+
+-- name: DeleteDeletedScoreMarker :exec
+DELETE FROM deleted_scores WHERE user = ? AND score_id = ?;
 
 -- name: UnassignAllTags :exec
 DELETE FROM score_tags WHERE user = ? AND score_id = ?;
@@ -48,11 +51,14 @@ DELETE FROM tags WHERE user = ? AND id = ?;
 -- name: FindDeletedTagMarker :one
 SELECT * FROM deleted_tags WHERE user = ? AND tag_id = ?;
 
--- name: FindDeletedTagIDsSince :many
-SELECT tag_id FROM deleted_tags WHERE user = ? AND deleted_at > ?;
+-- name: FindDeletedTagsSince :many
+SELECT tag_id, deleted_at FROM deleted_tags WHERE user = ? AND deleted_at > ?;
 
 -- name: CreateDeletedTagMarker :exec
 INSERT INTO deleted_tags (tag_id, user, deleted_at) VALUES (?, ?, unixepoch());
+
+-- name: DeleteDeletedTagMarker :exec
+DELETE FROM deleted_tags WHERE user = ? AND tag_id = ?;
 
 -- name: GetAssignedTagIDs :many
 SELECT tag_id FROM score_tags WHERE user = ? AND score_id = ?;

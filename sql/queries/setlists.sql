@@ -16,11 +16,14 @@ DELETE FROM setlists WHERE user = ? AND id = ?;
 -- name: FindDeletedSetlistMarker :one
 SELECT * FROM deleted_setlists WHERE user = ? AND setlist_id = ?;
 
--- name: FindDeletedSetlistIDsSince :many
-SELECT setlist_id FROM deleted_setlists WHERE user = ? AND deleted_at > ?;
+-- name: FindDeletedSetlistsSince :many
+SELECT setlist_id, deleted_at FROM deleted_setlists WHERE user = ? AND deleted_at > ?;
 
 -- name: CreateDeletedSetlistMarker :exec
 INSERT INTO deleted_setlists (setlist_id, user, deleted_at) VALUES (?, ?, unixepoch());
+
+-- name: DeleteDeletedSetlistMarker :exec
+DELETE FROM deleted_setlists WHERE user = ? AND setlist_id = ?;
 
 -- name: RemoveAllSetlistEntries :exec
 DELETE FROM setlist_entries WHERE user = ? AND setlist_id = ?;

@@ -317,26 +317,26 @@ func TestTombstoneOfOneUserDoesNotBlockAnother(t *testing.T) {
 	}
 
 	epoch := time.Unix(0, 0)
-	deletedScores, err := q.FindDeletedScoreIDsSince(ctx, FindDeletedScoreIDsSinceParams{User: userB, DeletedAt: epoch})
+	deletedScores, err := q.FindDeletedScoresSince(ctx, FindDeletedScoresSinceParams{User: userB, DeletedAt: epoch})
 	if err != nil {
-		t.Fatalf("find deleted score ids since: %s", err)
+		t.Fatalf("find deleted scores since: %s", err)
 	}
 	if len(deletedScores) != 0 {
-		t.Errorf("FindDeletedScoreIDsSince returned %v of %s for %s", deletedScores, userA, userB)
+		t.Errorf("FindDeletedScoresSince returned %v of %s for %s", deletedScores, userA, userB)
 	}
-	deletedTags, err := q.FindDeletedTagIDsSince(ctx, FindDeletedTagIDsSinceParams{User: userB, DeletedAt: epoch})
+	deletedTags, err := q.FindDeletedTagsSince(ctx, FindDeletedTagsSinceParams{User: userB, DeletedAt: epoch})
 	if err != nil {
-		t.Fatalf("find deleted tag ids since: %s", err)
+		t.Fatalf("find deleted tags since: %s", err)
 	}
 	if len(deletedTags) != 0 {
-		t.Errorf("FindDeletedTagIDsSince returned %v of %s for %s", deletedTags, userA, userB)
+		t.Errorf("FindDeletedTagsSince returned %v of %s for %s", deletedTags, userA, userB)
 	}
-	deletedSetlists, err := q.FindDeletedSetlistIDsSince(ctx, FindDeletedSetlistIDsSinceParams{User: userB, DeletedAt: epoch})
+	deletedSetlists, err := q.FindDeletedSetlistsSince(ctx, FindDeletedSetlistsSinceParams{User: userB, DeletedAt: epoch})
 	if err != nil {
-		t.Fatalf("find deleted setlist ids since: %s", err)
+		t.Fatalf("find deleted setlists since: %s", err)
 	}
 	if len(deletedSetlists) != 0 {
-		t.Errorf("FindDeletedSetlistIDsSince returned %v of %s for %s", deletedSetlists, userA, userB)
+		t.Errorf("FindDeletedSetlistsSince returned %v of %s for %s", deletedSetlists, userA, userB)
 	}
 
 	// the tombstones of A must not stop B from uploading the same ids

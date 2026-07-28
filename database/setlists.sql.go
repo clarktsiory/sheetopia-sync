@@ -46,6 +46,20 @@ func (q *Queries) CreateDeletedSetlistMarker(ctx context.Context, arg CreateDele
 	return err
 }
 
+const deleteDeletedSetlistMarker = `-- name: DeleteDeletedSetlistMarker :exec
+DELETE FROM deleted_setlists WHERE user = ? AND setlist_id = ?
+`
+
+type DeleteDeletedSetlistMarkerParams struct {
+	User      string
+	SetlistID string
+}
+
+func (q *Queries) DeleteDeletedSetlistMarker(ctx context.Context, arg DeleteDeletedSetlistMarkerParams) error {
+	_, err := q.db.ExecContext(ctx, deleteDeletedSetlistMarker, arg.User, arg.SetlistID)
+	return err
+}
+
 const deleteSetlist = `-- name: DeleteSetlist :execresult
 DELETE FROM setlists WHERE user = ? AND id = ?
 `
@@ -57,38 +71,6 @@ type DeleteSetlistParams struct {
 
 func (q *Queries) DeleteSetlist(ctx context.Context, arg DeleteSetlistParams) (sql.Result, error) {
 	return q.db.ExecContext(ctx, deleteSetlist, arg.User, arg.ID)
-}
-
-const findDeletedSetlistIDsSince = `-- name: FindDeletedSetlistIDsSince :many
-SELECT setlist_id FROM deleted_setlists WHERE user = ? AND deleted_at > ?
-`
-
-type FindDeletedSetlistIDsSinceParams struct {
-	User      string
-	DeletedAt time.Time
-}
-
-func (q *Queries) FindDeletedSetlistIDsSince(ctx context.Context, arg FindDeletedSetlistIDsSinceParams) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, findDeletedSetlistIDsSince, arg.User, arg.DeletedAt)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []string{}
-	for rows.Next() {
-		var setlist_id string
-		if err := rows.Scan(&setlist_id); err != nil {
-			return nil, err
-		}
-		items = append(items, setlist_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const findDeletedSetlistMarker = `-- name: FindDeletedSetlistMarker :one
@@ -105,6 +87,43 @@ func (q *Queries) FindDeletedSetlistMarker(ctx context.Context, arg FindDeletedS
 	var i DeletedSetlist
 	err := row.Scan(&i.User, &i.SetlistID, &i.DeletedAt)
 	return i, err
+}
+
+const findDeletedSetlistsSince = `-- name: FindDeletedSetlistsSince :many
+SELECT setlist_id, deleted_at FROM deleted_setlists WHERE user = ? AND deleted_at > ?
+`
+
+type FindDeletedSetlistsSinceParams struct {
+	User      string
+	DeletedAt time.Time
+}
+
+type FindDeletedSetlistsSinceRow struct {
+	SetlistID string
+	DeletedAt time.Time
+}
+
+func (q *Queries) FindDeletedSetlistsSince(ctx context.Context, arg FindDeletedSetlistsSinceParams) ([]FindDeletedSetlistsSinceRow, error) {
+	rows, err := q.db.QueryContext(ctx, findDeletedSetlistsSince, arg.User, arg.DeletedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FindDeletedSetlistsSinceRow{}
+	for rows.Next() {
+		var i FindDeletedSetlistsSinceRow
+		if err := rows.Scan(&i.SetlistID, &i.DeletedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const findSetlist = `-- name: FindSetlist :one

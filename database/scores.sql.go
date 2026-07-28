@@ -54,6 +54,34 @@ func (q *Queries) CreateDeletedTagMarker(ctx context.Context, arg CreateDeletedT
 	return err
 }
 
+const deleteDeletedScoreMarker = `-- name: DeleteDeletedScoreMarker :exec
+DELETE FROM deleted_scores WHERE user = ? AND score_id = ?
+`
+
+type DeleteDeletedScoreMarkerParams struct {
+	User    string
+	ScoreID string
+}
+
+func (q *Queries) DeleteDeletedScoreMarker(ctx context.Context, arg DeleteDeletedScoreMarkerParams) error {
+	_, err := q.db.ExecContext(ctx, deleteDeletedScoreMarker, arg.User, arg.ScoreID)
+	return err
+}
+
+const deleteDeletedTagMarker = `-- name: DeleteDeletedTagMarker :exec
+DELETE FROM deleted_tags WHERE user = ? AND tag_id = ?
+`
+
+type DeleteDeletedTagMarkerParams struct {
+	User  string
+	TagID string
+}
+
+func (q *Queries) DeleteDeletedTagMarker(ctx context.Context, arg DeleteDeletedTagMarkerParams) error {
+	_, err := q.db.ExecContext(ctx, deleteDeletedTagMarker, arg.User, arg.TagID)
+	return err
+}
+
 const deleteScore = `-- name: DeleteScore :execresult
 DELETE FROM scores WHERE user = ? AND id = ?
 `
@@ -112,38 +140,6 @@ func (q *Queries) FindAllScoreIDs(ctx context.Context) ([]FindAllScoreIDsRow, er
 	return items, nil
 }
 
-const findDeletedScoreIDsSince = `-- name: FindDeletedScoreIDsSince :many
-SELECT score_id FROM deleted_scores WHERE user = ? AND deleted_at > ?
-`
-
-type FindDeletedScoreIDsSinceParams struct {
-	User      string
-	DeletedAt time.Time
-}
-
-func (q *Queries) FindDeletedScoreIDsSince(ctx context.Context, arg FindDeletedScoreIDsSinceParams) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, findDeletedScoreIDsSince, arg.User, arg.DeletedAt)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []string{}
-	for rows.Next() {
-		var score_id string
-		if err := rows.Scan(&score_id); err != nil {
-			return nil, err
-		}
-		items = append(items, score_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const findDeletedScoreMarker = `-- name: FindDeletedScoreMarker :one
 SELECT user, score_id, deleted_at FROM deleted_scores WHERE user = ? AND score_id = ?
 `
@@ -160,28 +156,33 @@ func (q *Queries) FindDeletedScoreMarker(ctx context.Context, arg FindDeletedSco
 	return i, err
 }
 
-const findDeletedTagIDsSince = `-- name: FindDeletedTagIDsSince :many
-SELECT tag_id FROM deleted_tags WHERE user = ? AND deleted_at > ?
+const findDeletedScoresSince = `-- name: FindDeletedScoresSince :many
+SELECT score_id, deleted_at FROM deleted_scores WHERE user = ? AND deleted_at > ?
 `
 
-type FindDeletedTagIDsSinceParams struct {
+type FindDeletedScoresSinceParams struct {
 	User      string
 	DeletedAt time.Time
 }
 
-func (q *Queries) FindDeletedTagIDsSince(ctx context.Context, arg FindDeletedTagIDsSinceParams) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, findDeletedTagIDsSince, arg.User, arg.DeletedAt)
+type FindDeletedScoresSinceRow struct {
+	ScoreID   string
+	DeletedAt time.Time
+}
+
+func (q *Queries) FindDeletedScoresSince(ctx context.Context, arg FindDeletedScoresSinceParams) ([]FindDeletedScoresSinceRow, error) {
+	rows, err := q.db.QueryContext(ctx, findDeletedScoresSince, arg.User, arg.DeletedAt)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []string{}
+	items := []FindDeletedScoresSinceRow{}
 	for rows.Next() {
-		var tag_id string
-		if err := rows.Scan(&tag_id); err != nil {
+		var i FindDeletedScoresSinceRow
+		if err := rows.Scan(&i.ScoreID, &i.DeletedAt); err != nil {
 			return nil, err
 		}
-		items = append(items, tag_id)
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -206,6 +207,43 @@ func (q *Queries) FindDeletedTagMarker(ctx context.Context, arg FindDeletedTagMa
 	var i DeletedTag
 	err := row.Scan(&i.User, &i.TagID, &i.DeletedAt)
 	return i, err
+}
+
+const findDeletedTagsSince = `-- name: FindDeletedTagsSince :many
+SELECT tag_id, deleted_at FROM deleted_tags WHERE user = ? AND deleted_at > ?
+`
+
+type FindDeletedTagsSinceParams struct {
+	User      string
+	DeletedAt time.Time
+}
+
+type FindDeletedTagsSinceRow struct {
+	TagID     string
+	DeletedAt time.Time
+}
+
+func (q *Queries) FindDeletedTagsSince(ctx context.Context, arg FindDeletedTagsSinceParams) ([]FindDeletedTagsSinceRow, error) {
+	rows, err := q.db.QueryContext(ctx, findDeletedTagsSince, arg.User, arg.DeletedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FindDeletedTagsSinceRow{}
+	for rows.Next() {
+		var i FindDeletedTagsSinceRow
+		if err := rows.Scan(&i.TagID, &i.DeletedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const findScore = `-- name: FindScore :one

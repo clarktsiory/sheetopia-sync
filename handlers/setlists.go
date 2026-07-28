@@ -67,7 +67,7 @@ func (h *Handler) handleGetDeletedSetlists(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	ids, err := h.Queries.FindDeletedSetlistIDsSince(r.Context(), database.FindDeletedSetlistIDsSinceParams{
+	rows, err := h.Queries.FindDeletedSetlistsSince(r.Context(), database.FindDeletedSetlistsSinceParams{
 		User:      user,
 		DeletedAt: since,
 	})
@@ -76,11 +76,20 @@ func (h *Handler) handleGetDeletedSetlists(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	ids := make([]string, 0, len(rows))
+	deleted := make([]deletedItem, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.SetlistID)
+		deleted = append(deleted, deletedItem{ID: row.SetlistID, DeletedAt: row.DeletedAt})
+	}
+
 	type response struct {
-		SetlistIDs []string `json:"setlistIds"`
+		SetlistIDs      []string      `json:"setlistIds"`
+		DeletedSetlists []deletedItem `json:"deletedSetlists"`
 	}
 	respond(w, response{
-		SetlistIDs: ids,
+		SetlistIDs:      ids,
+		DeletedSetlists: deleted,
 	}, http.StatusOK)
 }
 
@@ -129,6 +138,7 @@ func (h *Handler) handleUpdateSetlist(w http.ResponseWriter, r *http.Request) {
 		Name      string    `json:"name"`
 		ScoreIDs  []string  `json:"scoreIds"`
 		UpdatedAt time.Time `json:"updatedAt"`
+		WrittenAt time.Time `json:"writtenAt"`
 	}
 	params, ok := decodeBody[request](w, r)
 	if !ok {
@@ -173,15 +183,25 @@ func (h *Handler) handleUpdateSetlist(w http.ResponseWriter, r *http.Request) {
 		SetlistID: id,
 	})
 	if err == nil {
-		type response struct {
-			DeletedAt time.Time `json:"deletedAt"`
+		if params.WrittenAt.IsZero() || !params.WrittenAt.After(deletedSetlistMarker.DeletedAt) {
+			type response struct {
+				DeletedAt time.Time `json:"deletedAt"`
+			}
+			respond(w, response{
+				DeletedAt: deletedSetlistMarker.DeletedAt,
+			}, http.StatusConflict)
+			return
 		}
-		respond(w, response{
-			DeletedAt: deletedSetlistMarker.DeletedAt,
-		}, http.StatusConflict)
-		return
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
+		// removing the marker keeps other devices from being handed a deletion for a live setlist
+		err = q.DeleteDeletedSetlistMarker(r.Context(), database.DeleteDeletedSetlistMarkerParams{
+			User:      user,
+			SetlistID: id,
+		})
+		if err != nil {
+			respondErr(w, fmt.Errorf("delete deleted setlist marker: %w", err))
+			return
+		}
+	} else if !errors.Is(err, sql.ErrNoRows) {
 		respondErr(w, fmt.Errorf("check if already deleted: %w", err))
 		return
 	}

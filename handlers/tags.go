@@ -62,7 +62,7 @@ func (h *Handler) handleGetDeletedTags(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ids, err := h.Queries.FindDeletedTagIDsSince(r.Context(), database.FindDeletedTagIDsSinceParams{
+	rows, err := h.Queries.FindDeletedTagsSince(r.Context(), database.FindDeletedTagsSinceParams{
 		User:      user,
 		DeletedAt: since,
 	})
@@ -71,11 +71,20 @@ func (h *Handler) handleGetDeletedTags(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ids := make([]string, 0, len(rows))
+	deleted := make([]deletedItem, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.TagID)
+		deleted = append(deleted, deletedItem{ID: row.TagID, DeletedAt: row.DeletedAt})
+	}
+
 	type response struct {
-		TagIDs []string `json:"tagIds"`
+		TagIDs      []string      `json:"tagIds"`
+		DeletedTags []deletedItem `json:"deletedTags"`
 	}
 	respond(w, response{
-		TagIDs: ids,
+		TagIDs:      ids,
+		DeletedTags: deleted,
 	}, http.StatusOK)
 }
 
@@ -110,6 +119,7 @@ func (h *Handler) handleUpdateTag(w http.ResponseWriter, r *http.Request) {
 		Name      string    `json:"name"`
 		Color     int       `json:"color"`
 		UpdatedAt time.Time `json:"updatedAt"`
+		WrittenAt time.Time `json:"writtenAt"`
 	}
 
 	params, ok := decodeBody[request](w, r)
@@ -155,15 +165,25 @@ func (h *Handler) handleUpdateTag(w http.ResponseWriter, r *http.Request) {
 		TagID: id,
 	})
 	if err == nil {
-		type response struct {
-			DeletedAt time.Time `json:"deletedAt"`
+		if params.WrittenAt.IsZero() || !params.WrittenAt.After(deletedTagMarker.DeletedAt) {
+			type response struct {
+				DeletedAt time.Time `json:"deletedAt"`
+			}
+			respond(w, response{
+				DeletedAt: deletedTagMarker.DeletedAt,
+			}, http.StatusConflict)
+			return
 		}
-		respond(w, response{
-			DeletedAt: deletedTagMarker.DeletedAt,
-		}, http.StatusConflict)
-		return
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
+		// removing the marker keeps other devices from being handed a deletion for a live tag
+		err = q.DeleteDeletedTagMarker(r.Context(), database.DeleteDeletedTagMarkerParams{
+			User:  user,
+			TagID: id,
+		})
+		if err != nil {
+			respondErr(w, fmt.Errorf("delete deleted tag marker: %w", err))
+			return
+		}
+	} else if !errors.Is(err, sql.ErrNoRows) {
 		respondErr(w, fmt.Errorf("check if already deleted: %w", err))
 		return
 	}

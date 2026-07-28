@@ -9,6 +9,11 @@ import (
 	"time"
 )
 
+type deletedItem struct {
+	ID        string    `json:"id"`
+	DeletedAt time.Time `json:"deletedAt"`
+}
+
 func getUser(r *http.Request) string {
 	user := r.Context().Value("user")
 	if user == nil {
