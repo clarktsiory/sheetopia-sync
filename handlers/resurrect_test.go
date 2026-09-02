@@ -92,6 +92,7 @@ type scoreRequest struct {
 type tagRequest struct {
 	Name      string     `json:"name"`
 	Color     int        `json:"color"`
+	Type      string     `json:"type,omitempty"`
 	UpdatedAt time.Time  `json:"updatedAt"`
 	WrittenAt *time.Time `json:"writtenAt,omitempty"`
 }

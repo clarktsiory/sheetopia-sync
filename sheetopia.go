@@ -2,5 +2,5 @@ package sheetopia
 
 var (
 	Version    = "dev"
-	APIVersion = "0.3.0"
+	APIVersion = "0.4.0"
 )

@@ -377,3 +377,222 @@ func TestDeletingAUserLeavesTheOtherIntact(t *testing.T) {
 		t.Errorf("score of deleted user %s survived: %v", userA, err)
 	}
 }
+
+// the same ids are deliberately used for both users
+const (
+	categoryID     = "category-1"
+	exerciseID     = "exercise-1"
+	routineID      = "routine-1"
+	routineEntryID = "routine-entry-1"
+	sessionID      = "session-1"
+	sessionEntryID = "session-entry-1"
+)
+
+// seedPractice creates a category, an exercise with a tag and a score entry, a routine with one
+// entry and a session with one entry under the shared ids with content identifying the owner.
+func seedPractice(t *testing.T, ctx context.Context, q *Queries, user string) {
+	t.Helper()
+	updatedAt := time.Unix(1000, 0)
+
+	err := q.UpsertExerciseCategory(ctx, UpsertExerciseCategoryParams{
+		ID:        categoryID,
+		User:      user,
+		UpdatedAt: updatedAt,
+		Name:      user + " category",
+	})
+	if err != nil {
+		t.Fatalf("upsert exercise category for %s: %s", user, err)
+	}
+
+	err = q.UpsertExercise(ctx, UpsertExerciseParams{
+		ID:           exerciseID,
+		User:         user,
+		UpdatedAt:    updatedAt,
+		Name:         user + " exercise",
+		CategoryID:   sql.NullString{String: categoryID, Valid: true},
+		MetadataJson: []byte(`{}`),
+	})
+	if err != nil {
+		t.Fatalf("upsert exercise for %s: %s", user, err)
+	}
+
+	err = q.AssignExerciseTag(ctx, AssignExerciseTagParams{User: user, ExerciseID: exerciseID, TagID: tagID})
+	if err != nil {
+		t.Fatalf("assign exercise tag for %s: %s", user, err)
+	}
+
+	err = q.AddExerciseScore(ctx, AddExerciseScoreParams{
+		User:       user,
+		ExerciseID: exerciseID,
+		Position:   0,
+		ScoreID:    user + " exercise score",
+	})
+	if err != nil {
+		t.Fatalf("add exercise score for %s: %s", user, err)
+	}
+
+	err = q.UpsertPracticeRoutine(ctx, UpsertPracticeRoutineParams{
+		ID:           routineID,
+		User:         user,
+		UpdatedAt:    updatedAt,
+		Name:         user + " routine",
+		MetadataJson: []byte(`{}`),
+	})
+	if err != nil {
+		t.Fatalf("upsert practice routine for %s: %s", user, err)
+	}
+
+	err = q.AddPracticeRoutineEntry(ctx, AddPracticeRoutineEntryParams{
+		User:         user,
+		ID:           routineEntryID,
+		RoutineID:    routineID,
+		Position:     0,
+		ExerciseID:   user + " routine exercise",
+		MetadataJson: []byte(`{}`),
+	})
+	if err != nil {
+		t.Fatalf("add practice routine entry for %s: %s", user, err)
+	}
+
+	err = q.UpsertPracticeSession(ctx, UpsertPracticeSessionParams{
+		ID:           sessionID,
+		User:         user,
+		UpdatedAt:    updatedAt,
+		StartedAt:    updatedAt,
+		MetadataJson: []byte(`{}`),
+	})
+	if err != nil {
+		t.Fatalf("upsert practice session for %s: %s", user, err)
+	}
+
+	err = q.AddPracticeSessionEntry(ctx, AddPracticeSessionEntryParams{
+		User:         user,
+		ID:           sessionEntryID,
+		SessionID:    sessionID,
+		ExerciseID:   user + " session exercise",
+		MetadataJson: []byte(`{}`),
+	})
+	if err != nil {
+		t.Fatalf("add practice session entry for %s: %s", user, err)
+	}
+}
+
+func TestPracticeRowsAreIndependentPerUser(t *testing.T) {
+	ctx, q := setupDB(t)
+	for _, user := range []string{userA, userB} {
+		seedUser(t, ctx, q, user)
+		seedPractice(t, ctx, q, user)
+	}
+
+	for _, user := range []string{userA, userB} {
+		category, err := q.FindExerciseCategory(ctx, FindExerciseCategoryParams{User: user, ID: categoryID})
+		if err != nil {
+			t.Fatalf("find exercise category of %s: %s", user, err)
+		}
+		if category.Name != user+" category" {
+			t.Errorf("FindExerciseCategory returned name %q for %s", category.Name, user)
+		}
+
+		exercise, err := q.FindExercise(ctx, FindExerciseParams{User: user, ID: exerciseID})
+		if err != nil {
+			t.Fatalf("find exercise of %s: %s", user, err)
+		}
+		if exercise.Name != user+" exercise" {
+			t.Errorf("FindExercise returned name %q for %s", exercise.Name, user)
+		}
+
+		scoreIDs, err := q.GetExerciseScoreIDs(ctx, GetExerciseScoreIDsParams{User: user, ExerciseID: exerciseID})
+		if err != nil {
+			t.Fatalf("get exercise score ids of %s: %s", user, err)
+		}
+		if !slices.Equal(scoreIDs, []string{user + " exercise score"}) {
+			t.Errorf("GetExerciseScoreIDs returned %v for %s", scoreIDs, user)
+		}
+
+		tagIDs, err := q.GetExerciseTagIDs(ctx, GetExerciseTagIDsParams{User: user, ExerciseID: exerciseID})
+		if err != nil {
+			t.Fatalf("get exercise tag ids of %s: %s", user, err)
+		}
+		if !slices.Equal(tagIDs, []string{tagID}) {
+			t.Errorf("GetExerciseTagIDs returned %v for %s", tagIDs, user)
+		}
+
+		entryRows, err := q.FindExerciseTagIDsChangedAfter(ctx, FindExerciseTagIDsChangedAfterParams{
+			User:    user,
+			Changed: time.Unix(0, 0),
+		})
+		if err != nil {
+			t.Fatalf("find exercise tag ids changed after for %s: %s", user, err)
+		}
+		if len(entryRows) != 1 {
+			t.Errorf("FindExerciseTagIDsChangedAfter returned %d rows for %s, want 1", len(entryRows), user)
+		}
+
+		routineEntries, err := q.GetPracticeRoutineEntries(ctx, GetPracticeRoutineEntriesParams{User: user, RoutineID: routineID})
+		if err != nil {
+			t.Fatalf("get practice routine entries of %s: %s", user, err)
+		}
+		if len(routineEntries) != 1 || routineEntries[0].ExerciseID != user+" routine exercise" {
+			t.Errorf("GetPracticeRoutineEntries returned %v for %s", routineEntries, user)
+		}
+
+		sessionEntries, err := q.GetPracticeSessionEntries(ctx, GetPracticeSessionEntriesParams{User: user, SessionID: sessionID})
+		if err != nil {
+			t.Fatalf("get practice session entries of %s: %s", user, err)
+		}
+		if len(sessionEntries) != 1 || sessionEntries[0].ExerciseID != user+" session exercise" {
+			t.Errorf("GetPracticeSessionEntries returned %v for %s", sessionEntries, user)
+		}
+	}
+}
+
+func TestDeletingPracticeRowsLeavesTheOtherUserIntact(t *testing.T) {
+	ctx, q := setupDB(t)
+	for _, user := range []string{userA, userB} {
+		seedUser(t, ctx, q, user)
+		seedPractice(t, ctx, q, user)
+	}
+
+	_, err := q.DeleteExercise(ctx, DeleteExerciseParams{User: userA, ID: exerciseID})
+	if err != nil {
+		t.Fatalf("delete exercise: %s", err)
+	}
+	_, err = q.FindExercise(ctx, FindExerciseParams{User: userB, ID: exerciseID})
+	if err != nil {
+		t.Errorf("DeleteExercise as %s removed the exercise of %s: %s", userA, userB, err)
+	}
+
+	_, err = q.DeletePracticeRoutine(ctx, DeletePracticeRoutineParams{User: userA, ID: routineID})
+	if err != nil {
+		t.Fatalf("delete practice routine: %s", err)
+	}
+	entries, err := q.GetPracticeRoutineEntries(ctx, GetPracticeRoutineEntriesParams{User: userB, RoutineID: routineID})
+	if err != nil {
+		t.Fatalf("get practice routine entries: %s", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("DeletePracticeRoutine as %s removed the entries of %s", userA, userB)
+	}
+
+	_, err = q.DeletePracticeSession(ctx, DeletePracticeSessionParams{User: userA, ID: sessionID})
+	if err != nil {
+		t.Fatalf("delete practice session: %s", err)
+	}
+	_, err = q.FindPracticeSession(ctx, FindPracticeSessionParams{User: userB, ID: sessionID})
+	if err != nil {
+		t.Errorf("DeletePracticeSession as %s removed the session of %s: %s", userA, userB, err)
+	}
+
+	// deleting a tag takes its exercise assignments with it, but only for its owner
+	_, err = q.DeleteTag(ctx, DeleteTagParams{User: userA, ID: tagID})
+	if err != nil {
+		t.Fatalf("delete tag: %s", err)
+	}
+	tagIDs, err := q.GetExerciseTagIDs(ctx, GetExerciseTagIDsParams{User: userB, ExerciseID: exerciseID})
+	if err != nil {
+		t.Fatalf("get exercise tag ids: %s", err)
+	}
+	if !slices.Equal(tagIDs, []string{tagID}) {
+		t.Errorf("DeleteTag as %s removed the exercise tag assignments of %s", userA, userB)
+	}
+}

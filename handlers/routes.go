@@ -42,6 +42,30 @@ func (h *Handler) registerRoutes() {
 		r.Get("/api/setlist/{id}", h.handleGetSetlist)
 		r.Post("/api/setlist/{id}", h.handleUpdateSetlist)
 		r.Delete("/api/setlist/{id}", h.handleDeleteSetlist)
+
+		r.Get("/api/practice/category", h.handleGetExerciseCategories)
+		r.Get("/api/practice/category/deleted", h.handleGetDeletedExerciseCategories)
+		r.Get("/api/practice/category/{id}", h.handleGetExerciseCategory)
+		r.Post("/api/practice/category/{id}", h.handleUpdateExerciseCategory)
+		r.Delete("/api/practice/category/{id}", h.handleDeleteExerciseCategory)
+
+		r.Get("/api/practice/exercise", h.handleGetExercises)
+		r.Get("/api/practice/exercise/deleted", h.handleGetDeletedExercises)
+		r.Get("/api/practice/exercise/{id}", h.handleGetExercise)
+		r.Post("/api/practice/exercise/{id}", h.handleUpdateExercise)
+		r.Delete("/api/practice/exercise/{id}", h.handleDeleteExercise)
+
+		r.Get("/api/practice/routine", h.handleGetPracticeRoutines)
+		r.Get("/api/practice/routine/deleted", h.handleGetDeletedPracticeRoutines)
+		r.Get("/api/practice/routine/{id}", h.handleGetPracticeRoutine)
+		r.Post("/api/practice/routine/{id}", h.handleUpdatePracticeRoutine)
+		r.Delete("/api/practice/routine/{id}", h.handleDeletePracticeRoutine)
+
+		r.Get("/api/practice/session", h.handleGetPracticeSessions)
+		r.Get("/api/practice/session/deleted", h.handleGetDeletedPracticeSessions)
+		r.Get("/api/practice/session/{id}", h.handleGetPracticeSession)
+		r.Post("/api/practice/session/{id}", h.handleUpdatePracticeSession)
+		r.Delete("/api/practice/session/{id}", h.handleDeletePracticeSession)
 	})
 }
 

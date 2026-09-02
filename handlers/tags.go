@@ -16,6 +16,8 @@ type tagResponse struct {
 	Name      string    `json:"name"`
 	Color     int       `json:"color"`
 	UpdatedAt time.Time `json:"updatedAt"`
+
+	Type *string `json:"type,omitempty"`
 }
 
 // GET /api/tag?changedAfter=<time>
@@ -42,6 +44,7 @@ func (h *Handler) handleGetTags(w http.ResponseWriter, r *http.Request) {
 			ID:        tag.ID,
 			Name:      tag.Name,
 			Color:     int(tag.Color),
+			Type:      nullString(tag.Type),
 			UpdatedAt: tag.UpdatedAt,
 		})
 	}
@@ -106,6 +109,7 @@ func (h *Handler) handleGetTag(w http.ResponseWriter, r *http.Request) {
 		ID:        tag.ID,
 		Name:      tag.Name,
 		Color:     int(tag.Color),
+		Type:      nullString(tag.Type),
 		UpdatedAt: tag.UpdatedAt,
 	}, http.StatusOK)
 }
@@ -118,6 +122,7 @@ func (h *Handler) handleUpdateTag(w http.ResponseWriter, r *http.Request) {
 	type request struct {
 		Name      string    `json:"name"`
 		Color     int       `json:"color"`
+		Type      string    `json:"type"`
 		UpdatedAt time.Time `json:"updatedAt"`
 		WrittenAt time.Time `json:"writtenAt"`
 	}
@@ -141,18 +146,16 @@ func (h *Handler) handleUpdateTag(w http.ResponseWriter, r *http.Request) {
 
 	q := h.Queries.WithTx(tx)
 
+	// a client that does not know about types must not reset the type of an existing tag
+	var tagType sql.NullString
+
 	tag, err := q.FindTag(r.Context(), database.FindTagParams{
 		User: user,
 		ID:   id,
 	})
 	if err == nil {
-		if !tag.UpdatedAt.Before(params.UpdatedAt) {
-			type response struct {
-				UpdatedAt time.Time `json:"updatedAt"`
-			}
-			respond(w, response{
-				UpdatedAt: tag.UpdatedAt,
-			}, http.StatusConflict)
+		tagType = tag.Type
+		if staleUpdate(w, "updatedAt", tag.UpdatedAt, params.UpdatedAt) {
 			return
 		}
 	} else if !errors.Is(err, sql.ErrNoRows) {
@@ -160,32 +163,27 @@ func (h *Handler) handleUpdateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deletedTagMarker, err := q.FindDeletedTagMarker(r.Context(), database.FindDeletedTagMarkerParams{
-		User:  user,
-		TagID: id,
+	ok = resolveTombstone(w, params.WrittenAt, tombstone{
+		find: func() (time.Time, error) {
+			marker, err := q.FindDeletedTagMarker(r.Context(), database.FindDeletedTagMarkerParams{
+				User:  user,
+				TagID: id,
+			})
+			return marker.DeletedAt, err
+		},
+		remove: func() error {
+			return q.DeleteDeletedTagMarker(r.Context(), database.DeleteDeletedTagMarkerParams{
+				User:  user,
+				TagID: id,
+			})
+		},
 	})
-	if err == nil {
-		if params.WrittenAt.IsZero() || !params.WrittenAt.After(deletedTagMarker.DeletedAt) {
-			type response struct {
-				DeletedAt time.Time `json:"deletedAt"`
-			}
-			respond(w, response{
-				DeletedAt: deletedTagMarker.DeletedAt,
-			}, http.StatusConflict)
-			return
-		}
-		// removing the marker keeps other devices from being handed a deletion for a live tag
-		err = q.DeleteDeletedTagMarker(r.Context(), database.DeleteDeletedTagMarkerParams{
-			User:  user,
-			TagID: id,
-		})
-		if err != nil {
-			respondErr(w, fmt.Errorf("delete deleted tag marker: %w", err))
-			return
-		}
-	} else if !errors.Is(err, sql.ErrNoRows) {
-		respondErr(w, fmt.Errorf("check if already deleted: %w", err))
+	if !ok {
 		return
+	}
+
+	if params.Type != "" {
+		tagType = sql.NullString{String: params.Type, Valid: true}
 	}
 
 	err = q.UpsertTag(r.Context(), database.UpsertTagParams{
@@ -194,6 +192,7 @@ func (h *Handler) handleUpdateTag(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt: params.UpdatedAt,
 		Name:      params.Name,
 		Color:     int64(params.Color),
+		Type:      tagType,
 	})
 	if err != nil {
 		respondErr(w, fmt.Errorf("upsert tag: %w", err))

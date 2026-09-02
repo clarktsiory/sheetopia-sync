@@ -23,6 +23,8 @@ type scoreResponse struct {
 	FileType          database.FileType `json:"fileType"`
 	TagIDs            []string          `json:"tagIds"`
 	Metadata          json.RawMessage   `json:"metadata"`
+
+	Type *string `json:"type,omitempty"`
 }
 
 // GET /api/scores?changedAfter=<time>
@@ -57,6 +59,7 @@ func (h *Handler) handleGetScores(w http.ResponseWriter, r *http.Request) {
 				FileUpdatedAt:     result.FileUpdatedAt,
 				FileType:          database.FileType(result.FileType),
 				Metadata:          result.MetadataJson,
+				Type:              nullString(result.Type),
 				TagIDs:            make([]string, 0, initialTagIdsCapacity),
 			})
 		}
@@ -142,6 +145,7 @@ func (h *Handler) handleGetScore(w http.ResponseWriter, r *http.Request) {
 		FileType:          database.FileType(score.FileType),
 		TagIDs:            tagIDs,
 		Metadata:          score.MetadataJson,
+		Type:              nullString(score.Type),
 	}, http.StatusOK)
 }
 
@@ -161,6 +165,7 @@ func (h *Handler) handleUpdateScore(w http.ResponseWriter, r *http.Request) {
 		WrittenAt         time.Time       `json:"writtenAt"`
 		Metadata          json.RawMessage `json:"metadata"`
 		TagIDs            []string        `json:"tagIds"`
+		Type              string          `json:"type"`
 	}
 	params, ok := decodeBody[request](w, r)
 	if !ok {
@@ -182,19 +187,16 @@ func (h *Handler) handleUpdateScore(w http.ResponseWriter, r *http.Request) {
 	q := h.Queries.WithTx(tx)
 
 	hasFile := false
+	// a client that does not know about types must not reset the type of an existing score
+	var scoreType sql.NullString
 
 	score, err := q.FindScore(r.Context(), database.FindScoreParams{
 		User: user,
 		ID:   id,
 	})
 	if err == nil {
-		if !score.MetadataUpdatedAt.Before(params.MetadataUpdatedAt) {
-			type response struct {
-				MetadataUpdatedAt time.Time `json:"metadataUpdatedAt"`
-			}
-			respond(w, response{
-				MetadataUpdatedAt: score.MetadataUpdatedAt,
-			}, http.StatusConflict)
+		scoreType = score.Type
+		if staleUpdate(w, "metadataUpdatedAt", score.MetadataUpdatedAt, params.MetadataUpdatedAt) {
 			return
 		}
 		hasFile = score.FileType != "none"
@@ -203,32 +205,27 @@ func (h *Handler) handleUpdateScore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deletedScoreMarker, err := q.FindDeletedScoreMarker(r.Context(), database.FindDeletedScoreMarkerParams{
-		User:    user,
-		ScoreID: id,
+	ok = resolveTombstone(w, params.WrittenAt, tombstone{
+		find: func() (time.Time, error) {
+			marker, err := q.FindDeletedScoreMarker(r.Context(), database.FindDeletedScoreMarkerParams{
+				User:    user,
+				ScoreID: id,
+			})
+			return marker.DeletedAt, err
+		},
+		remove: func() error {
+			return q.DeleteDeletedScoreMarker(r.Context(), database.DeleteDeletedScoreMarkerParams{
+				User:    user,
+				ScoreID: id,
+			})
+		},
 	})
-	if err == nil {
-		if params.WrittenAt.IsZero() || !params.WrittenAt.After(deletedScoreMarker.DeletedAt) {
-			type response struct {
-				DeletedAt time.Time `json:"deletedAt"`
-			}
-			respond(w, response{
-				DeletedAt: deletedScoreMarker.DeletedAt,
-			}, http.StatusConflict)
-			return
-		}
-		// removing the marker keeps other devices from being handed a deletion for a live score
-		err = q.DeleteDeletedScoreMarker(r.Context(), database.DeleteDeletedScoreMarkerParams{
-			User:    user,
-			ScoreID: id,
-		})
-		if err != nil {
-			respondErr(w, fmt.Errorf("delete deleted score marker: %w", err))
-			return
-		}
-	} else if !errors.Is(err, sql.ErrNoRows) {
-		respondErr(w, fmt.Errorf("check if already deleted: %w", err))
+	if !ok {
 		return
+	}
+
+	if params.Type != "" {
+		scoreType = sql.NullString{String: params.Type, Valid: true}
 	}
 
 	err = q.UpsertScore(r.Context(), database.UpsertScoreParams{
@@ -237,6 +234,7 @@ func (h *Handler) handleUpdateScore(w http.ResponseWriter, r *http.Request) {
 		MetadataUpdatedAt: params.MetadataUpdatedAt,
 		Title:             params.Title,
 		MetadataJson:      params.Metadata,
+		Type:              scoreType,
 	})
 	if err != nil {
 		respondErr(w, fmt.Errorf("upsert score: %w", err))

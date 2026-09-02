@@ -1,0 +1,29 @@
+meta {
+  name: updateCategory
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{url}}/api/practice/category/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: qwertz
+}
+
+body:json {
+  {
+    "name": "Scales",
+    "position": 0,
+    "updatedAt": "2026-09-02T10:00:00.000Z",
+    "writtenAt": "2026-09-02T10:00:00.000Z"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

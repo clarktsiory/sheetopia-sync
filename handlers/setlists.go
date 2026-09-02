@@ -164,13 +164,7 @@ func (h *Handler) handleUpdateSetlist(w http.ResponseWriter, r *http.Request) {
 		ID:   id,
 	})
 	if err == nil {
-		if !setlist.UpdatedAt.Before(params.UpdatedAt) {
-			type response struct {
-				UpdatedAt time.Time `json:"updatedAt"`
-			}
-			respond(w, response{
-				UpdatedAt: setlist.UpdatedAt,
-			}, http.StatusConflict)
+		if staleUpdate(w, "updatedAt", setlist.UpdatedAt, params.UpdatedAt) {
 			return
 		}
 	} else if !errors.Is(err, sql.ErrNoRows) {
@@ -178,31 +172,22 @@ func (h *Handler) handleUpdateSetlist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deletedSetlistMarker, err := q.FindDeletedSetlistMarker(r.Context(), database.FindDeletedSetlistMarkerParams{
-		User:      user,
-		SetlistID: id,
+	ok = resolveTombstone(w, params.WrittenAt, tombstone{
+		find: func() (time.Time, error) {
+			marker, err := q.FindDeletedSetlistMarker(r.Context(), database.FindDeletedSetlistMarkerParams{
+				User:      user,
+				SetlistID: id,
+			})
+			return marker.DeletedAt, err
+		},
+		remove: func() error {
+			return q.DeleteDeletedSetlistMarker(r.Context(), database.DeleteDeletedSetlistMarkerParams{
+				User:      user,
+				SetlistID: id,
+			})
+		},
 	})
-	if err == nil {
-		if params.WrittenAt.IsZero() || !params.WrittenAt.After(deletedSetlistMarker.DeletedAt) {
-			type response struct {
-				DeletedAt time.Time `json:"deletedAt"`
-			}
-			respond(w, response{
-				DeletedAt: deletedSetlistMarker.DeletedAt,
-			}, http.StatusConflict)
-			return
-		}
-		// removing the marker keeps other devices from being handed a deletion for a live setlist
-		err = q.DeleteDeletedSetlistMarker(r.Context(), database.DeleteDeletedSetlistMarkerParams{
-			User:      user,
-			SetlistID: id,
-		})
-		if err != nil {
-			respondErr(w, fmt.Errorf("delete deleted setlist marker: %w", err))
-			return
-		}
-	} else if !errors.Is(err, sql.ErrNoRows) {
-		respondErr(w, fmt.Errorf("check if already deleted: %w", err))
+	if !ok {
 		return
 	}
 

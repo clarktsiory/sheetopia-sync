@@ -1,0 +1,20 @@
+meta {
+  name: deleteRoutine
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{url}}/api/practice/routine/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: qwertz
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

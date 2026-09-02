@@ -10,9 +10,9 @@ LEFT JOIN score_tags ON scores.user = score_tags.user AND scores.id = score_tags
 WHERE scores.user = ? AND changed > ? AND file_type != 'none' ORDER BY scores.id;
 
 -- name: UpsertScore :exec
-INSERT INTO scores (id, user, metadata_updated_at, file_updated_at, file_type, title, metadata_json, changed)
-VALUES (?,?,?,0,'none',?,?,unixepoch())
-ON CONFLICT (user, id) DO UPDATE SET metadata_updated_at = excluded.metadata_updated_at, title = excluded.title, metadata_json = excluded.metadata_json, changed = excluded.changed;
+INSERT INTO scores (id, user, metadata_updated_at, file_updated_at, file_type, title, metadata_json, type, changed)
+VALUES (?,?,?,0,'none',?,?,?,unixepoch())
+ON CONFLICT (user, id) DO UPDATE SET metadata_updated_at = excluded.metadata_updated_at, title = excluded.title, metadata_json = excluded.metadata_json, type = excluded.type, changed = excluded.changed;
 
 -- name: DeleteScore :execresult
 DELETE FROM scores WHERE user = ? AND id = ?;
@@ -42,8 +42,8 @@ SELECT * FROM tags WHERE user = ? AND id = ?;
 SELECT * FROM tags WHERE user = ? AND changed > ?;
 
 -- name: UpsertTag :exec
-INSERT INTO tags (id, user, updated_at, name, color, changed) VALUES (?, ?, ?, ?, ?, unixepoch())
-ON CONFLICT (user, id) DO UPDATE SET updated_at = excluded.updated_at, name = excluded.name, color = excluded.color, changed = excluded.changed;
+INSERT INTO tags (id, user, updated_at, name, color, type, changed) VALUES (?, ?, ?, ?, ?, ?, unixepoch())
+ON CONFLICT (user, id) DO UPDATE SET updated_at = excluded.updated_at, name = excluded.name, color = excluded.color, type = excluded.type, changed = excluded.changed;
 
 -- name: DeleteTag :execresult
 DELETE FROM tags WHERE user = ? AND id = ?;

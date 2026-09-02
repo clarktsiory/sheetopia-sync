@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -12,6 +13,20 @@ import (
 type deletedItem struct {
 	ID        string    `json:"id"`
 	DeletedAt time.Time `json:"deletedAt"`
+}
+
+func nullString(value sql.NullString) *string {
+	if !value.Valid {
+		return nil
+	}
+	return &value.String
+}
+
+func nullTime(value sql.NullTime) *time.Time {
+	if !value.Valid {
+		return nil
+	}
+	return &value.Time
 }
 
 func getUser(r *http.Request) string {
@@ -95,4 +110,52 @@ func decodeBody[T any](w http.ResponseWriter, r *http.Request) (T, bool) {
 		return obj, false
 	}
 	return obj, true
+}
+
+// staleUpdate reports whether the stored row is at least as new as the incoming write. It responds
+// with the stored timestamp under key in that case so that the client can settle its local write.
+func staleUpdate(w http.ResponseWriter, key string, stored, incoming time.Time) bool {
+	if stored.Before(incoming) {
+		return false
+	}
+	respond(w, map[string]time.Time{
+		key: stored,
+	}, http.StatusConflict)
+	return true
+}
+
+type tombstone struct {
+	find   func() (time.Time, error)
+	remove func() error
+}
+
+// resolveTombstone reports whether a write may proceed for a row that may have been deleted before.
+// Only a write that an import restored after the deletion wins. Removing the marker keeps other
+// devices from being handed a deletion for a live row.
+func resolveTombstone(w http.ResponseWriter, writtenAt time.Time, t tombstone) bool {
+	deletedAt, err := t.find()
+	if errors.Is(err, sql.ErrNoRows) {
+		return true
+	}
+	if err != nil {
+		respondErr(w, fmt.Errorf("check if already deleted: %w", err))
+		return false
+	}
+
+	if writtenAt.IsZero() || !writtenAt.After(deletedAt) {
+		type response struct {
+			DeletedAt time.Time `json:"deletedAt"`
+		}
+		respond(w, response{
+			DeletedAt: deletedAt,
+		}, http.StatusConflict)
+		return false
+	}
+
+	err = t.remove()
+	if err != nil {
+		respondErr(w, fmt.Errorf("delete deleted marker: %w", err))
+		return false
+	}
+	return true
 }

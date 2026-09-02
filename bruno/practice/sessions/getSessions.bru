@@ -1,0 +1,16 @@
+meta {
+  name: getSessions
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{url}}/api/practice/session
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

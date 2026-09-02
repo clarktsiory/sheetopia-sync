@@ -247,7 +247,7 @@ func (q *Queries) FindDeletedTagsSince(ctx context.Context, arg FindDeletedTagsS
 }
 
 const findScore = `-- name: FindScore :one
-SELECT user, id, metadata_updated_at, file_updated_at, file_type, title, metadata_json, changed FROM scores WHERE user = ? AND id = ?
+SELECT user, id, metadata_updated_at, file_updated_at, file_type, title, metadata_json, changed, type FROM scores WHERE user = ? AND id = ?
 `
 
 type FindScoreParams struct {
@@ -267,12 +267,13 @@ func (q *Queries) FindScore(ctx context.Context, arg FindScoreParams) (Score, er
 		&i.Title,
 		&i.MetadataJson,
 		&i.Changed,
+		&i.Type,
 	)
 	return i, err
 }
 
 const findScoresChangedAfterWithTagIds = `-- name: FindScoresChangedAfterWithTagIds :many
-SELECT scores.user, scores.id, scores.metadata_updated_at, scores.file_updated_at, scores.file_type, scores.title, scores.metadata_json, scores.changed, score_tags.tag_id FROM scores
+SELECT scores.user, scores.id, scores.metadata_updated_at, scores.file_updated_at, scores.file_type, scores.title, scores.metadata_json, scores.changed, scores.type, score_tags.tag_id FROM scores
 LEFT JOIN score_tags ON scores.user = score_tags.user AND scores.id = score_tags.score_id
 WHERE scores.user = ? AND changed > ? AND file_type != 'none' ORDER BY scores.id
 `
@@ -291,6 +292,7 @@ type FindScoresChangedAfterWithTagIdsRow struct {
 	Title             string
 	MetadataJson      []byte
 	Changed           time.Time
+	Type              sql.NullString
 	TagID             sql.NullString
 }
 
@@ -312,6 +314,7 @@ func (q *Queries) FindScoresChangedAfterWithTagIds(ctx context.Context, arg Find
 			&i.Title,
 			&i.MetadataJson,
 			&i.Changed,
+			&i.Type,
 			&i.TagID,
 		); err != nil {
 			return nil, err
@@ -328,7 +331,7 @@ func (q *Queries) FindScoresChangedAfterWithTagIds(ctx context.Context, arg Find
 }
 
 const findTag = `-- name: FindTag :one
-SELECT user, id, updated_at, name, color, changed FROM tags WHERE user = ? AND id = ?
+SELECT user, id, updated_at, name, color, changed, type FROM tags WHERE user = ? AND id = ?
 `
 
 type FindTagParams struct {
@@ -346,12 +349,13 @@ func (q *Queries) FindTag(ctx context.Context, arg FindTagParams) (Tag, error) {
 		&i.Name,
 		&i.Color,
 		&i.Changed,
+		&i.Type,
 	)
 	return i, err
 }
 
 const findTagsChangedAfter = `-- name: FindTagsChangedAfter :many
-SELECT user, id, updated_at, name, color, changed FROM tags WHERE user = ? AND changed > ?
+SELECT user, id, updated_at, name, color, changed, type FROM tags WHERE user = ? AND changed > ?
 `
 
 type FindTagsChangedAfterParams struct {
@@ -375,6 +379,7 @@ func (q *Queries) FindTagsChangedAfter(ctx context.Context, arg FindTagsChangedA
 			&i.Name,
 			&i.Color,
 			&i.Changed,
+			&i.Type,
 		); err != nil {
 			return nil, err
 		}
@@ -458,9 +463,9 @@ func (q *Queries) UpdateFileInfo(ctx context.Context, arg UpdateFileInfoParams) 
 }
 
 const upsertScore = `-- name: UpsertScore :exec
-INSERT INTO scores (id, user, metadata_updated_at, file_updated_at, file_type, title, metadata_json, changed)
-VALUES (?,?,?,0,'none',?,?,unixepoch())
-ON CONFLICT (user, id) DO UPDATE SET metadata_updated_at = excluded.metadata_updated_at, title = excluded.title, metadata_json = excluded.metadata_json, changed = excluded.changed
+INSERT INTO scores (id, user, metadata_updated_at, file_updated_at, file_type, title, metadata_json, type, changed)
+VALUES (?,?,?,0,'none',?,?,?,unixepoch())
+ON CONFLICT (user, id) DO UPDATE SET metadata_updated_at = excluded.metadata_updated_at, title = excluded.title, metadata_json = excluded.metadata_json, type = excluded.type, changed = excluded.changed
 `
 
 type UpsertScoreParams struct {
@@ -469,6 +474,7 @@ type UpsertScoreParams struct {
 	MetadataUpdatedAt time.Time
 	Title             string
 	MetadataJson      []byte
+	Type              sql.NullString
 }
 
 func (q *Queries) UpsertScore(ctx context.Context, arg UpsertScoreParams) error {
@@ -478,13 +484,14 @@ func (q *Queries) UpsertScore(ctx context.Context, arg UpsertScoreParams) error 
 		arg.MetadataUpdatedAt,
 		arg.Title,
 		arg.MetadataJson,
+		arg.Type,
 	)
 	return err
 }
 
 const upsertTag = `-- name: UpsertTag :exec
-INSERT INTO tags (id, user, updated_at, name, color, changed) VALUES (?, ?, ?, ?, ?, unixepoch())
-ON CONFLICT (user, id) DO UPDATE SET updated_at = excluded.updated_at, name = excluded.name, color = excluded.color, changed = excluded.changed
+INSERT INTO tags (id, user, updated_at, name, color, type, changed) VALUES (?, ?, ?, ?, ?, ?, unixepoch())
+ON CONFLICT (user, id) DO UPDATE SET updated_at = excluded.updated_at, name = excluded.name, color = excluded.color, type = excluded.type, changed = excluded.changed
 `
 
 type UpsertTagParams struct {
@@ -493,6 +500,7 @@ type UpsertTagParams struct {
 	UpdatedAt time.Time
 	Name      string
 	Color     int64
+	Type      sql.NullString
 }
 
 func (q *Queries) UpsertTag(ctx context.Context, arg UpsertTagParams) error {
@@ -502,6 +510,7 @@ func (q *Queries) UpsertTag(ctx context.Context, arg UpsertTagParams) error {
 		arg.UpdatedAt,
 		arg.Name,
 		arg.Color,
+		arg.Type,
 	)
 	return err
 }

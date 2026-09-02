@@ -1,0 +1,36 @@
+meta {
+  name: updateExercise
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{url}}/api/practice/exercise/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: qwertz
+}
+
+body:json {
+  {
+    "name": "C major scale",
+    "categoryId": "9a1f5a4e-2ab2-4b0c-9a1e-4f0d4f5a6b7c",
+    "tagIds": ["2be8f2e8-536e-4042-91ae-e75cbb1e3f8a"],
+    "scoreIds": ["0370cd32-2001-4f58-8a63-e12223f1795a"],
+    "metadata": {
+      "description": "Two octaves",
+      "instrument": "Piano",
+      "targetBpm": 90
+    },
+    "updatedAt": "2026-09-02T10:00:00.000Z",
+    "writtenAt": "2026-09-02T10:00:00.000Z"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

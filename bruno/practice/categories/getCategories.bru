@@ -1,0 +1,16 @@
+meta {
+  name: getCategories
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{url}}/api/practice/category
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

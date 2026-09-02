@@ -5,8 +5,33 @@
 package database
 
 import (
+	"database/sql"
 	"time"
 )
+
+type DeletedExercise struct {
+	User       string
+	ExerciseID string
+	DeletedAt  time.Time
+}
+
+type DeletedExerciseCategory struct {
+	User       string
+	CategoryID string
+	DeletedAt  time.Time
+}
+
+type DeletedPracticeRoutine struct {
+	User      string
+	RoutineID string
+	DeletedAt time.Time
+}
+
+type DeletedPracticeSession struct {
+	User      string
+	SessionID string
+	DeletedAt time.Time
+}
 
 type DeletedScore struct {
 	User      string
@@ -26,6 +51,63 @@ type DeletedTag struct {
 	DeletedAt time.Time
 }
 
+type Exercise struct {
+	User         string
+	ID           string
+	UpdatedAt    time.Time
+	Name         string
+	CategoryID   sql.NullString
+	MetadataJson []byte
+	Changed      time.Time
+}
+
+type ExerciseCategory struct {
+	User      string
+	ID        string
+	UpdatedAt time.Time
+	Name      string
+	Position  int64
+	Changed   time.Time
+}
+
+type PracticeRoutine struct {
+	User         string
+	ID           string
+	UpdatedAt    time.Time
+	Name         string
+	MetadataJson []byte
+	Changed      time.Time
+}
+
+type PracticeRoutineEntry struct {
+	User         string
+	ID           string
+	RoutineID    string
+	Position     int64
+	ExerciseID   string
+	MetadataJson []byte
+}
+
+type PracticeSession struct {
+	User         string
+	ID           string
+	UpdatedAt    time.Time
+	StartedAt    time.Time
+	EndedAt      sql.NullTime
+	RoutineID    sql.NullString
+	MetadataJson []byte
+	Changed      time.Time
+}
+
+type PracticeSessionEntry struct {
+	User           string
+	ID             string
+	SessionID      string
+	ExerciseID     string
+	RoutineEntryID sql.NullString
+	MetadataJson   []byte
+}
+
 type Score struct {
 	User              string
 	ID                string
@@ -35,6 +117,7 @@ type Score struct {
 	Title             string
 	MetadataJson      []byte
 	Changed           time.Time
+	Type              sql.NullString
 }
 
 type Setlist struct {
@@ -52,6 +135,7 @@ type Tag struct {
 	Name      string
 	Color     int64
 	Changed   time.Time
+	Type      sql.NullString
 }
 
 type User struct {

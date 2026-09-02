@@ -1,0 +1,20 @@
+meta {
+  name: getExercise
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{url}}/api/practice/exercise/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: qwertz
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
